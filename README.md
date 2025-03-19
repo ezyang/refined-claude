@@ -6,12 +6,22 @@
 
 Accessibility refinements to Claude Desktop.  OS X only.
 
+## Features
+
+* **Auto approve.** Automatically approve tool usage requests.
+* **Auto continue.** Automatically continue chats when they hit the request
+  limit.
+
 ## Installation
 
 Install this tool using `pip`:
+
 ```bash
 uv tool install refined-claude
 ```
+
+You will need to give Terminal permissions for Accessibility, if you haven't already.
+
 ## Usage
 
 With a running instance of Claude Desktop, just run this in the background:
@@ -19,4 +29,4 @@ With a running instance of Claude Desktop, just run this in the background:
 refined-claude
 ```
 
-You will need to give Terminal rights to Accessibility.
+You can disable various features using ``--no-auto-approve`` or ``--no-auto-continue``.
