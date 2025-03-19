@@ -1,6 +1,6 @@
 [project]
 name = "refined-claude"
-version = "0.1"
+version = "0.1.1"
 description = "Accessibility refinements to Claude Desktop"
 readme = "README.md"
 authors = [{name = "Edward Z. Yang"}]
