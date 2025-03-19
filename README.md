@@ -2,7 +2,6 @@
 
 [![PyPI](https://img.shields.io/pypi/v/refined-claude.svg)](https://pypi.org/project/refined-claude/)
 [![Changelog](https://img.shields.io/github/v/release/ezyang/refined-claude?include_prereleases&label=changelog)](https://github.com/ezyang/refined-claude/releases)
-[![Tests](https://github.com/ezyang/refined-claude/actions/workflows/test.yml/badge.svg)](https://github.com/ezyang/refined-claude/actions/workflows/test.yml)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](https://github.com/ezyang/refined-claude/blob/master/LICENSE)
 
 Accessibility refinements to Claude Desktop
