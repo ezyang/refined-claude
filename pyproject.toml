@@ -10,12 +10,21 @@ classifiers = [
     "License :: OSI Approved :: Apache Software License"
 ]
 dependencies = [
-    "click"
+    "click",
+    "pyobjc-core==10.3.2",
+    "pyobjc-framework-applicationservices==10.3.2",
+    "pyobjc-framework-cocoa==10.3.2",
+    "pyobjc-framework-quartz==10.3.2",
 ]
 
 [build-system]
 requires = ["setuptools"]
 build-backend = "setuptools.build_meta"
+
+[dependency-groups]
+dev = [
+    "ruff>=0.11.0",
+]
 
 [project.urls]
 Homepage = "https://github.com/ezyang/refined-claude"
