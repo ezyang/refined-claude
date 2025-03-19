@@ -8,9 +8,9 @@ Accessibility refinements to Claude Desktop.  OS X only.
 
 ## Features
 
-* **Auto approve.** Automatically approve tool usage requests.
-* **Auto continue.** Automatically continue chats when they hit the request
-  limit.
+- **Auto approve.** Automatically approve tool usage requests.
+- **Auto continue.** Automatically continue chats when they hit the reply
+  size limit.
 
 ## Installation
 
