@@ -4,37 +4,19 @@
 [![Changelog](https://img.shields.io/github/v/release/ezyang/refined-claude?include_prereleases&label=changelog)](https://github.com/ezyang/refined-claude/releases)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](https://github.com/ezyang/refined-claude/blob/master/LICENSE)
 
-Accessibility refinements to Claude Desktop
+Accessibility refinements to Claude Desktop.  OS X only.
 
 ## Installation
 
 Install this tool using `pip`:
 ```bash
-pip install refined-claude
+uv tool install refined-claude
 ```
 ## Usage
 
-For help, run:
+With a running instance of Claude Desktop, just run this in the background:
 ```bash
-refined-claude --help
+refined-claude
 ```
-You can also use:
-```bash
-python -m refined_claude --help
-```
-## Development
 
-To contribute to this tool, first checkout the code. Then create a new virtual environment:
-```bash
-cd refined-claude
-python -m venv venv
-source venv/bin/activate
-```
-Now install the dependencies and test dependencies:
-```bash
-pip install -e '.[test]'
-```
-To run the tests:
-```bash
-python -m pytest
-```
+You will need to give Terminal rights to Accessibility.
