@@ -5,6 +5,7 @@ import ApplicationServices
 import HIServices
 import time
 import logging
+import subprocess
 from .logging import init_logging
 
 
@@ -143,6 +144,13 @@ def run_notify_on_complete(window, running: list[int]):
     if running[0] and not stop_response:
         log.info("Detected chat response finished")
         running[0] = False
+        subprocess.check_call(
+            [
+                "osascript",
+                "-e",
+                'display notification "Claude response finished" with title "Claude" sound name "Glass"',
+            ]
+        )
     elif not running[0] and stop_response:
         log.info("Detected chat response started")
         running[0] = True
