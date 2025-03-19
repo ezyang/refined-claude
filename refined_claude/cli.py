@@ -6,11 +6,67 @@ import HIServices
 import time
 import logging
 import subprocess
+import json
 from .logging import init_logging
 
 
 not_set = object()
 log = logging.getLogger(__name__)
+
+# Debugging utils
+
+
+def ax_dump_element(parent):
+    r = []
+
+    def traverse(index, element, level):
+        if element is None:
+            return
+
+        if ax_attr(element, "AXRole", "") == "AXStaticText":
+            value = ax_attr(element, "AXValue", "(n/a)")
+            r.append("_" * level + " " + str(index) + " " + value)
+        else:
+            r.append(
+                "_" * level
+                + " "
+                + str(index)
+                + " <"
+                + ax_attr(element, "AXRole", "")
+                + " "
+                + ax_dump_attrs(element)
+                + ">"
+            )
+
+        children = ax_attr(element, "AXChildren", [])
+        for i, child in enumerate(children):
+            traverse(i, child, level + 1)
+
+    traverse(0, parent, 0)
+    return "\n".join(r)
+
+
+def ax_dump_attrs(element):
+    r = []
+    attribute_names = ApplicationServices.AXUIElementCopyAttributeNames(element, None)
+    for attribute in attribute_names[1]:
+        if attribute not in {
+            "AXTitle",
+            "AXDescription",
+            "AXDOMClassList",
+            "AXDOMIdentifier",
+        }:
+            continue
+        value = ApplicationServices.AXUIElementCopyAttributeValue(
+            element, attribute, None
+        )
+        if not value[1]:
+            continue
+        r.append(f"{attribute}={str(value[1]).replace('\n', '')}")
+    return " ".join(r)
+
+
+# Utilities
 
 
 def ax_attr(element, attribute, default=not_set):
@@ -22,6 +78,18 @@ def ax_attr(element, attribute, default=not_set):
             return default
         raise ValueError(f"Error getting attribute {attribute}: {error}")
     return value
+
+
+def ax_role(element):
+    return ax_attr(element, "AXRole", "")
+
+
+def ax_children(element):
+    return ax_attr(element, "AXChildren", [])
+
+
+def ax_dom_class_list(element):
+    return ax_attr(element, "AXDOMClassList", [])
 
 
 def ax_ypos(e):
@@ -51,13 +119,89 @@ def ax_findall(parent, pred):
     return results
 
 
-def ax_dump(element):
-    attribute_names = ApplicationServices.AXUIElementCopyAttributeNames(element, None)
-    for attribute in attribute_names[1]:
-        value = ApplicationServices.AXUIElementCopyAttributeValue(
-            element, attribute, None
-        )
-        print(f"{attribute}: {value[1]}")
+def parse_text(t):
+    """Flatten element into plain text only (space separated).  Use as terminal
+    rendering call; also good for debugging."""
+    ret = []
+
+    def traverse(element):
+        if element is None:
+            return
+
+        if ax_role(element) == "AXStaticText":
+            value = ax_attr(element, "AXValue")
+            if value:
+                ret.append(value)
+
+        for child in ax_children(element):
+            traverse(child)
+
+    traverse(t)
+    return " ".join(ret)
+
+
+def parse_para(para):
+    """Parse a paragraph into lines, handling lists as well.  Conventionally
+    these lines are joined together with a single newline."""
+    role = ax_role(para)
+    ret = []
+    if role == "AXGroup":
+        ret.append(parse_text(para))
+    elif role == "AXList":
+        is_bullet = "list-disc" in ax_dom_class_list(para)
+        for i, t in enumerate(ax_children(para)):
+            parsed_t = parse_para(t)
+            if not parsed_t:
+                # Still generate an empty bullet
+                parsed_t = [""]
+            if is_bullet:
+                leader = "* "
+            else:
+                leader = f"{i + 1}. "
+            indent = " " * len(leader)
+            ret.append(leader + parsed_t[0].strip())
+            ret.extend(indent + x.strip() for x in parsed_t[1:])
+    else:
+        log.info("unrecognized %s", role)
+        ret.append(parse_text(para))
+    return ret
+
+
+def parse_messages(parent):
+    """Parse interleaved user/assistant messages"""
+    # TODO: Make the output result more structured
+
+    messages = ax_attr(parent, "AXChildren", [])
+    ret = []  # messages
+    for i, message in enumerate(messages):
+        message = ax_children(message)[0]
+        ret_message = []  # paragraphs
+        message_classes = ax_attr(message, "AXDOMClassList", [])
+        if "w-8" in message_classes:
+            log.info("skipping %s message trailer", len(messages) - 1)
+            break
+        if "font-claude-message" in message_classes:
+            label = "Assistant: "
+            log.info("assistant message %s", parse_text(message)[:40])
+            # assistant message
+            for j, para in enumerate(ax_children(message)):
+                if "absolute" in ax_attr(para, "AXDOMClassList", []):
+                    break  # message end
+                ret_message.append("\n".join(parse_para(para)))
+        else:
+            # print("#####")
+            # print(ax_dump_element(message))
+            label = "User: "
+            log.info("user message %s", parse_text(message)[:40])
+            for j, para in enumerate(ax_children(message)):
+                if j == 0:
+                    continue  # skip username
+                if "absolute" in ax_attr(para, "AXDOMClassList", []):
+                    break  # message end
+                ret_message.append("\n".join(parse_para(para)))
+        ret.append(label + "\n\n" + "\n\n".join(ret_message))
+
+    return "\n\n----\n\n".join(ret)
 
 
 def run_auto_approve(window, dry_run):
@@ -156,16 +300,84 @@ def run_notify_on_complete(window, running: list[int]):
         running[0] = True
 
 
+def find_chat_content_element(window):
+    # TODO: Short circuit traversal
+    web_areas = ax_findall(window, lambda e: ax_attr(e, "AXRole", "") == "AXWebArea")
+    if len(web_areas) < 2:
+        log.error("Could not find at least two AXWebArea elements, %s", web_areas)
+        return None
+    web_area = web_areas[1]
+    log.info(
+        "Found target AXWebArea (second instance): %s out of %s",
+        web_area,
+        len(web_areas),
+    )
+
+    if len(ax_children(web_area)) == 1:
+        web_area = ax_children(web_area)[0]
+
+    # Drill down 1
+    for c in ax_attr(web_area, "AXChildren", []):
+        if "w-full" in ax_attr(c, "AXDOMClassList", []):
+            break
+    else:
+        log.error("couldn't find relevant child 1")
+        return None
+    g = c
+
+    # Drill down 2
+    for c in ax_attr(g, "AXChildren", []):
+        if "relative" in ax_attr(c, "AXDOMClassList", []):
+            break
+    else:
+        log.error("couldn't find relevant child 2")
+        return None
+    target_group = c
+
+    log.info("Found target content group: %s", target_group)
+    return target_group
+
+
+def run_snapshot_history(window, output_file=None):
+    """Capture text content from the chat and optionally save to a file."""
+    content_element = find_chat_content_element(window)
+    if not content_element:
+        log.info("Could not find chat content element")
+        return
+
+    log.info("Taking snapshot of chat content")
+    text_content = parse_messages(content_element)
+
+    if text_content:
+        log.info("Captured %d text", len(text_content))
+
+        if output_file:
+            try:
+                timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
+                with open(output_file, "w") as f:
+                    f.write(text_content)
+                log.info("Saved snapshot to %s", output_file)
+            except Exception as e:
+                log.error("Failed to save snapshot: %s", e)
+
+
 @click.command()
 @click.option("--auto-approve/--no-auto-approve", default=True)
 @click.option("--auto-continue/--no-auto-continue", default=True)
 @click.option("--notify-on-complete/--no-notify-on-complete", default=True)
+@click.option(
+    "--snapshot-history",
+    type=click.Path(),
+    default=None,
+    help="Capture chat content and save to specified file",
+)
 @click.option("--dry-run/--no-dry-run", default=False)
 @click.option("--once/--no-once", default=False)
 def cli(
     auto_approve: bool,
     auto_continue: bool,
     notify_on_complete: bool,
+    snapshot_history: str,
     dry_run: bool,
     once: bool,
 ):
@@ -180,6 +392,7 @@ def cli(
     ]
     windows = [window for app in claude_apps for window in ax_attr(app, "AXWindows")]
     running = [False]
+
     while True:
         log.info("Start iteration")
         for window in windows:
@@ -190,6 +403,8 @@ def cli(
                 run_auto_continue(window, dry_run)
             if notify_on_complete:
                 run_notify_on_complete(window, running)
+            if snapshot_history:
+                run_snapshot_history(window, snapshot_history)
         if once:
             return
         time.sleep(1)
