@@ -25,9 +25,11 @@ def ax_attr(element, attribute, default=not_set):
 
 def ax_ypos(e):
     pos = str(ax_attr(e, "AXPosition", ""))
-    assert "y:" in pos, pos
-    y_part = pos.split("y:")[1].split()[0]
-    return float(y_part)
+    if "y:" in pos:
+        y_part = pos.split("y:")[1].split()[0]
+        return float(y_part)
+    else:
+        return 0.0
 
 
 def ax_findall(parent, pred):
