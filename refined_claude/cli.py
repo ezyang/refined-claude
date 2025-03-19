@@ -127,20 +127,20 @@ def run_auto_continue(window, dry_run):
     (send_button,) = ax_findall(
         window,
         lambda e: ax_attr(e, "AXRole", "") == "AXButton"
-        and pr(ax_attr(e, "AXDescription", "")) == "Send Message",
+        and ax_attr(e, "AXDescription", "") == "Send Message",
     )
     HIServices.AXUIElementPerformAction(send_button, "AXPress")
 
 
 @click.command()
 @click.option("--auto-approve/--no-auto-approve", default=True)
-@click.option("--auto-continue/--no-auto-continue", default=False)  # WIP
+@click.option("--auto-continue/--no-auto-continue", default=True)
 @click.option("--dry-run/--no-dry-run", default=False)
 @click.option("--once/--no-once", default=False)
 def cli(auto_approve: bool, auto_continue: bool, dry_run: bool, once: bool):
     init_logging()
-    # NB: Claude is only queried at process start (maybe an option to requery
-    # every loop iteration
+    # NB: Claude is only queried at process start (maybe add an option to
+    # requery every loop iteration
     apps = AppKit.NSWorkspace.sharedWorkspace().runningApplications()
     claude_apps = [
         ApplicationServices.AXUIElementCreateApplication(app.processIdentifier())
