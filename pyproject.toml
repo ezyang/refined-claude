@@ -18,8 +18,8 @@ dependencies = [
 ]
 
 [build-system]
-requires = ["setuptools"]
-build-backend = "setuptools.build_meta"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
 [dependency-groups]
 dev = [
@@ -34,6 +34,3 @@ CI = "https://github.com/ezyang/refined-claude/actions"
 
 [project.scripts]
 refined-claude = "refined_claude.cli:cli"
-
-[project.optional-dependencies]
-test = ["pytest"]
