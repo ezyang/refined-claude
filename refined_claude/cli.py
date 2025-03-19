@@ -134,12 +134,33 @@ def run_auto_continue(window, dry_run):
     HIServices.AXUIElementPerformAction(send_button, "AXPress")
 
 
+def run_notify_on_complete(window, running: list[int]):
+    stop_response = ax_findall(
+        window,
+        lambda e: ax_attr(e, "AXRole", "") == "AXButton"
+        and ax_attr(e, "AXDescription", "") == "Stop Response",
+    )
+    if running[0] and not stop_response:
+        log.info("Detected chat response finished")
+        running[0] = False
+    elif not running[0] and stop_response:
+        log.info("Detected chat response started")
+        running[0] = True
+
+
 @click.command()
 @click.option("--auto-approve/--no-auto-approve", default=True)
 @click.option("--auto-continue/--no-auto-continue", default=True)
+@click.option("--notify-on-complete/--no-notify-on-complete", default=True)
 @click.option("--dry-run/--no-dry-run", default=False)
 @click.option("--once/--no-once", default=False)
-def cli(auto_approve: bool, auto_continue: bool, dry_run: bool, once: bool):
+def cli(
+    auto_approve: bool,
+    auto_continue: bool,
+    notify_on_complete: bool,
+    dry_run: bool,
+    once: bool,
+):
     init_logging()
     # NB: Claude is only queried at process start (maybe add an option to
     # requery every loop iteration
@@ -150,14 +171,17 @@ def cli(auto_approve: bool, auto_continue: bool, dry_run: bool, once: bool):
         if app.localizedName() == "Claude"
     ]
     windows = [window for app in claude_apps for window in ax_attr(app, "AXWindows")]
+    running = [False]
     while True:
         log.info("Start iteration")
         for window in windows:
-            log.info("Window %s", window)
+            # log.info("Window %s", window)
             if auto_approve:
                 run_auto_approve(window, dry_run)
             if auto_continue:
                 run_auto_continue(window, dry_run)
+            if notify_on_complete:
+                run_notify_on_complete(window, running)
         if once:
             return
         time.sleep(1)
