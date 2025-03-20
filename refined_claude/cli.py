@@ -137,7 +137,7 @@ def parse_text(t):
             traverse(child)
 
     traverse(t)
-    return " ".join(ret)
+    return "".join(ret)
 
 
 def parse_para(para):
@@ -171,35 +171,49 @@ def parse_messages(parent):
     """Parse interleaved user/assistant messages"""
     # TODO: Make the output result more structured
 
+    ZOOM = 1
+
     messages = ax_attr(parent, "AXChildren", [])
     ret = []  # messages
     for i, message in enumerate(messages):
-        message = ax_children(message)[0]
-        ret_message = []  # paragraphs
+        if i != ZOOM:
+            continue
         message_classes = ax_attr(message, "AXDOMClassList", [])
-        if "w-8" in message_classes:
+        if 'group/thumbnail' in message_classes:
+            log.info("skipping thumbnail at %s", i)
+            continue
+        if 'group' in message_classes:
+            assert len(ax_children(message)) == 1, ax_dump_element(message)
+            inner_message = ax_children(message)[0]
+        else:
+            inner_message = message
+        ret_message = []  # paragraphs
+        inner_message_classes = ax_attr(inner_message, "AXDOMClassList", [])
+        if "w-8" in inner_message_classes:
             log.info("skipping %s message trailer", len(messages) - 1)
             break
-        if "font-claude-message" in message_classes:
+        if "font-claude-message" in inner_message_classes:
             label = "Assistant: "
-            log.info("assistant message %s", parse_text(message)[:40])
+            log.info("assistant message %s", parse_text(inner_message)[:40])
             # assistant message
-            for j, para in enumerate(ax_children(message)):
+            for j, para in enumerate(ax_children(inner_message)):
                 if "absolute" in ax_attr(para, "AXDOMClassList", []):
                     break  # message end
                 ret_message.append("\n".join(parse_para(para)))
         else:
-            # print("#####")
-            # print(ax_dump_element(message))
             label = "User: "
-            log.info("user message %s", parse_text(message)[:40])
-            for j, para in enumerate(ax_children(message)):
+            log.info("user message %s", parse_text(inner_message)[:40])
+            for j, para in enumerate(ax_children(inner_message)):
                 if j == 0:
                     continue  # skip username
                 if "absolute" in ax_attr(para, "AXDOMClassList", []):
                     break  # message end
                 ret_message.append("\n".join(parse_para(para)))
         ret.append(label + "\n\n" + "\n\n".join(ret_message))
+        if i == ZOOM:
+            print("#####")
+            print(ax_dump_element(message))
+            break
 
     return "\n\n----\n\n".join(ret)
 
@@ -305,6 +319,7 @@ def find_chat_content_element(window):
     web_areas = ax_findall(window, lambda e: ax_attr(e, "AXRole", "") == "AXWebArea")
     if len(web_areas) < 2:
         log.error("Could not find at least two AXWebArea elements, %s", web_areas)
+        log.info(ax_dump_element(window))
         return None
     web_area = web_areas[1]
     log.info(
@@ -390,13 +405,20 @@ def cli(
         for app in apps
         if app.localizedName() == "Claude"
     ]
+    log.info("Apps: %s", claude_apps)
     windows = [window for app in claude_apps for window in ax_attr(app, "AXWindows")]
     running = [False]
+    log.info("Windows: %s", windows)
 
     while True:
         log.info("Start iteration")
         for window in windows:
-            # log.info("Window %s", window)
+
+            # TEMP
+            run_snapshot_history(window, snapshot_history)
+            return
+
+            log.info("Window %s", window)
             if auto_approve:
                 run_auto_approve(window, dry_run)
             if auto_continue:
