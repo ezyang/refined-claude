@@ -20,7 +20,7 @@ Install this tool using `pip`:
 uv tool install refined-claude
 ```
 
-You will need to give Terminal permissions for Accessibility, if you haven't already.
+You will need to give Terminal permissions for Accessibility, if you haven't already. (System Settings -> Privacy & Security -> Accessibility -> +)
 
 ## Usage
 
