@@ -157,7 +157,7 @@ class HAX:
 
     @property
     def ypos(self):
-        pos = str(self._get("AXPosition"))
+        pos = str(self._get("AXPosition", ""))
         if "y:" in pos:
             y_part = pos.split("y:")[1].split()[0]
             return float(y_part)
