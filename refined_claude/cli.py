@@ -62,6 +62,7 @@ def ax_dump_attrs(hax):
             "AXDescription",
             "AXDOMClassList",
             "AXDOMIdentifier",
+            "AXURL",
         }:
             continue
 
@@ -163,6 +164,12 @@ class HAX:
             return float(y_part)
         else:
             return 0.0
+
+    @property
+    def url(self):
+        """Get the URL of the element if it has an AXURL attribute."""
+        url = self._get("AXURL", None)
+        return str(url) if url is not None else None
 
     def inner_text(self):
         """Flatten element into plain text only (space separated).  Use as terminal
@@ -333,6 +340,13 @@ def find_chat_content_element(window):
         case _:
             log.error("Couldn't find WebArea: %s", window.repr(5))
             return None
+
+    # Get the URL from web_area if it exists using the url property
+    url_str = web_area.url
+    if url_str is not None:
+        log.info("Found WebArea URL: %s", url_str)
+    else:
+        log.info("No AXURL attribute found in WebArea")
 
     match web_area:
         case HAX(
