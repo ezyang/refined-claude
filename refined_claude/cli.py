@@ -353,7 +353,9 @@ def find_chat_content_element(window):
             children=[
                 HAX(
                     children_by_class={
-                        "w-full": [HAX(children_by_class={"relative": [target_group]})]
+                        "relative": [
+                            HAX(children_by_class={"relative": [target_group]})
+                        ]
                     }
                 )
             ]
