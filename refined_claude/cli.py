@@ -8,8 +8,11 @@ import logging
 import subprocess
 import json
 import re
+import os
 from collections import defaultdict
+from pathlib import Path
 from .logging import init_logging
+from .storage import SnapshotStorage
 
 
 not_set = object()
@@ -357,6 +360,16 @@ def is_claude_chat_url(web_view):
         return False
 
 
+def extract_chat_uuid(web_view):
+    """Extract the chat UUID from the web view URL."""
+    url_str = web_view.url
+    if url_str is not None:
+        match = re.match(r"https://claude\.ai/chat/([0-9a-f-]+)", url_str)
+        if match:
+            return match.group(1)
+    return None
+
+
 def find_chat_content_element(web_view):
     """Find the chat content element in the web view."""
     match web_view:
@@ -473,27 +486,36 @@ def parse_messages(parent):
     return "\n\n----\n\n".join(ret)
 
 
-def run_snapshot_history(web_view, output_file=None):
-    """Capture text content from the chat and optionally save to a file."""
+def run_snapshot_history(web_view, storage_dir=None):
+    """Capture text content from the chat and save to a file based on UUID.
+
+    Args:
+        web_view: The web view containing the chat.
+        storage_dir: Directory to store snapshots. If None, uses CWD.
+    """
     content_element = find_chat_content_element(web_view)
     if not content_element:
         log.info("Could not find chat content element")
         return
 
-    log.info("Taking snapshot of chat content")
+    # Extract UUID from URL
+    uuid = extract_chat_uuid(web_view)
+    if not uuid:
+        log.info("Could not extract chat UUID")
+        return
+
+    log.info("Taking snapshot of chat with UUID: %s", uuid)
     text_content = parse_messages(content_element)
 
     if text_content:
-        log.info("Captured %d text", len(text_content))
+        log.info("Captured %d characters of text", len(text_content))
 
-        if output_file:
-            try:
-                timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
-                with open(output_file, "w") as f:
-                    f.write(text_content)
-                log.info("Saved snapshot to %s", output_file)
-            except Exception as e:
-                log.error("Failed to save snapshot: %s", e)
+        # Initialize storage manager
+        storage = SnapshotStorage(storage_dir)
+
+        # Save snapshot
+        file_path = storage.update_snapshot(uuid, text_content)
+        log.info("Saved snapshot to %s", file_path)
 
 
 @click.command()
@@ -501,10 +523,15 @@ def run_snapshot_history(web_view, output_file=None):
 @click.option("--auto-continue/--no-auto-continue", default=True)
 @click.option("--notify-on-complete/--no-notify-on-complete", default=True)
 @click.option(
-    "--snapshot-history",
-    type=click.Path(),
+    "--snapshot-history/--no-snapshot-history",
+    default=False,
+    help="Enable saving chat snapshots to files",
+)
+@click.option(
+    "--snapshot-dir",
+    type=click.Path(file_okay=False),
     default=None,
-    help="Capture chat content and save to specified file",
+    help="Directory to store snapshot files (default: CWD)",
 )
 @click.option("--dry-run/--no-dry-run", default=False)
 @click.option("--once/--no-once", default=False)
@@ -512,11 +539,13 @@ def cli(
     auto_approve: bool,
     auto_continue: bool,
     notify_on_complete: bool,
-    snapshot_history: str,
+    snapshot_history: bool,
+    snapshot_dir: str,
     dry_run: bool,
     once: bool,
 ):
     init_logging()
+
     # NB: Claude is only queried at process start (maybe add an option to
     # requery every loop iteration
     apps = AppKit.NSWorkspace.sharedWorkspace().runningApplications()
@@ -529,6 +558,15 @@ def cli(
     windows = [window for app in claude_apps for window in app.windows]
     running = [False]
     log.info("Windows: %s", windows)
+
+    # Initialize storage if snapshot history is enabled
+    if snapshot_history and not dry_run:
+        # Create storage to initialize database and directories
+        storage = SnapshotStorage(snapshot_dir)
+        log.info(
+            f"Snapshot history enabled. Saving to database at {storage.db_path}, "
+            f"files in {storage.snapshot_dir}"
+        )
 
     while True:
         log.info("Start iteration")
@@ -552,8 +590,11 @@ def cli(
                 run_auto_continue(web_view, dry_run)
             if notify_on_complete:
                 run_notify_on_complete(web_view, running)
-            if snapshot_history:
-                run_snapshot_history(web_view, snapshot_history)
+
+            # Handle snapshot history
+            if snapshot_history and not dry_run:
+                run_snapshot_history(web_view, snapshot_dir)
+
         if once:
             return
         time.sleep(1)
