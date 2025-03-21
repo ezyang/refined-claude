@@ -17,7 +17,6 @@ log = logging.getLogger(__name__)
 # Debugging utils
 
 
-
 def ax_dump_element(parent, depth=None):
     r = []
 
@@ -171,7 +170,7 @@ class HAX:
         traverse(self)
         return "".join(ret)
 
-    def repr(self, depth):
+    def repr(self, depth=None):
         return ax_dump_element(self.elem, depth)
 
     def __repr__(self):
@@ -203,7 +202,9 @@ class HAX:
 
 
 def run_auto_approve(window, dry_run):
-    buttons = window.findall(lambda e: e.role == "AXButton" and e.title == "Allow for This Chat")
+    buttons = window.findall(
+        lambda e: e.role == "AXButton" and e.title == "Allow for This Chat"
+    )
     assert len(buttons) <= 1
     if not buttons:
         return
@@ -221,10 +222,12 @@ def run_auto_approve(window, dry_run):
 
 
 def run_auto_continue(window, dry_run):
-    max_length_msgs = window.findall(lambda e: e.role == "AXStaticText" and "hit the max length for a message" in e.value)
+    max_length_msgs = window.findall(
+        lambda e: e.role == "AXStaticText"
+        and "hit the max length for a message" in e.value
+    )
     retry_buttons = window.findall(
-        lambda e: e.role == "AXButton"
-        and e.title == "Retry",
+        lambda e: e.role == "AXButton" and e.title == "Retry",
     )
     watermark = max((e.ypos for e in max_length_msgs), default=None)
     if watermark is None:
@@ -252,9 +255,11 @@ def run_auto_continue(window, dry_run):
         log.info("Stopping now because of --dry-run")
         return
     textarea.value = "Continue"
-    (send_button,) = window,findall(
-        lambda e: e.role == "AXButton"
-        and e.description == "Send Message",
+    (send_button,) = (
+        window,
+        findall(
+            lambda e: e.role == "AXButton" and e.description == "Send Message",
+        ),
     )
     send_button.press()
 
@@ -264,8 +269,7 @@ def run_auto_continue(window, dry_run):
 
 def run_notify_on_complete(window, running: list[int]):
     stop_response = window.findall(
-        lambda e: e.role == "AXButton"
-        and e.description == "Stop Response",
+        lambda e: e.role == "AXButton" and e.description == "Stop Response",
     )
     if running[0] and not stop_response:
         log.info("Detected chat response finished")
@@ -287,28 +291,46 @@ def run_notify_on_complete(window, running: list[int]):
 
 def find_chat_content_element(window):
     match window:
-        case HAX(children_by_class={"RootView": [
-            HAX(children_by_class={"NonClientView": [
-                HAX(children_by_class={"NativeFrameViewMac": [
-                    HAX(children_by_class={"ClientView": [
-                        HAX(children=[_, web_area])
-                    ]})
-                ]})
-            ]})
-        ]}):
+        case HAX(
+            children_by_class={
+                "RootView": [
+                    HAX(
+                        children_by_class={
+                            "NonClientView": [
+                                HAX(
+                                    children_by_class={
+                                        "NativeFrameViewMac": [
+                                            HAX(
+                                                children_by_class={
+                                                    "ClientView": [
+                                                        HAX(children=[_, web_area])
+                                                    ]
+                                                }
+                                            )
+                                        ]
+                                    }
+                                )
+                            ]
+                        }
+                    )
+                ]
+            }
+        ):
             log.info("Found WebArea: %s", web_area.repr(0))
         case _:
             log.error("Couldn't find WebArea: %s", window.repr(5))
             return None
 
     match web_area:
-        case HAX(children=[
-            HAX(children_by_class={"w-full": [
-                HAX(children_by_class={"relative": [
-                    target_group
-                ]})
-            ]})
-        ]):
+        case HAX(
+            children=[
+                HAX(
+                    children_by_class={
+                        "w-full": [HAX(children_by_class={"relative": [target_group]})]
+                    }
+                )
+            ]
+        ):
             log.info("Found target content group: %s", target_group.repr(0))
         case _:
             log.error("Couldn't find content group: %s", web_area.repr(3))
@@ -338,8 +360,12 @@ def parse_para(para):
             indent = " " * len(leader)
             ret.append(leader + parsed_t[0].strip())
             ret.extend(indent + x.strip() for x in parsed_t[1:])
+    elif role == "AXButton":
+        # Tool call button
+        # TODO: this is the only place you can find out what tool was called
+        ret.append(para.inner_text())
     else:
-        log.info("unrecognized %s", role)
+        log.info("unrecognized %s, %s", role, para.repr())
         ret.append(para.inner_text())
     return ret
 
@@ -348,48 +374,61 @@ def parse_messages(parent):
     """Parse interleaved user/assistant messages"""
     # TODO: Make the output result more structured
 
-    ZOOM = 1
+    # print("#####")
+    # print(parent.repr(1))
+    # print("#####")
 
     messages = parent.children
     ret = []  # messages
     for i, message in enumerate(messages):
-        if i != ZOOM:
-            continue
-        message_classes = message.dom_class_list
-        if 'group/thumbnail' in message_classes:
-            log.info("skipping thumbnail at %s", i)
-            continue
-        #if 'group' in message_classes:
-        #    inner_message = ax_children(message)[0]
-        #else:
-        inner_message = message
-        ret_message = []  # paragraphs
-        inner_message_classes = inner_message.dom_class_list
-        if "w-8" in inner_message_classes:
-            log.info("skipping %s message trailer", len(messages) - 1)
-            break
-        if "font-claude-message" in inner_message_classes:
-            label = "Assistant: "
-            log.info("assistant message %s", inner_message.inner_text()[:40])
-            # assistant message
-            for j, para in enumerate(inner_message.children):
-                if "absolute" in ax_attr(para, "AXDOMClassList", []):
-                    break  # message end
-                ret_message.append("\n".join(parse_para(para)))
-        else:
-            label = "User: "
-            log.info("user message %s", inner_message.inner_text()[:40])
-            for j, para in enumerate(inner_message.children):
-                if j == 0:
-                    continue  # skip username
-                if "absolute" in ax_attr(para, "AXDOMClassList", []):
-                    break  # message end
-                ret_message.append("\n".join(parse_para(para)))
+        ret_message = []
+        match message:
+            case HAX(dom_class_list={"group/thumbnail": True}):
+                log.info("skipping thumbnail at %s", i)
+                continue
+
+            case HAX(dom_class_list={"p-1": True}):
+                log.info("skipping %s message trailer", len(messages) - 1)
+                break
+
+            case HAX(
+                dom_class_list={"group": True},
+                children_by_class={"font-claude-message": [inner]},
+            ):
+                label = "Assistant: "
+                log.info("assistant message %s", message.inner_text()[:40])
+                # TODO: distinguish tool calls in here
+                for para in inner.children:
+                    if "absolute" in para.dom_class_list:
+                        break  # message end
+                    ret_message.append("\n".join(parse_para(para)))
+
+            case (
+                HAX(
+                    dom_class_list={"group": True},
+                    children=[HAX(role="AXStaticText"), *inners],
+                )
+                | HAX(
+                    children=[
+                        HAX(
+                            dom_class_list={"group": True},
+                            children=[HAX(role="AXStaticText"), *inners],
+                        )
+                    ]
+                )
+            ):
+                label = "User: "
+                log.info("user message %s", message.inner_text()[:40])
+                for para in inners:
+                    if "absolute" in para.dom_class_list:
+                        break  # message end
+                    ret_message.append("\n".join(parse_para(para)))
+
+            case _:
+                log.warning("unrecognized message %s", message.repr(2))
+                ret_message.append(message.inner_text())
+
         ret.append(label + "\n\n" + "\n\n".join(ret_message))
-        if i == ZOOM:
-            print("#####")
-            print(message.repr(None))
-            break
 
     return "\n\n----\n\n".join(ret)
 
@@ -454,7 +493,6 @@ def cli(
     while True:
         log.info("Start iteration")
         for window in windows:
-
             # TEMP
             run_snapshot_history(window, snapshot_history)
             return
