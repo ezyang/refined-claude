@@ -17,15 +17,15 @@ log = logging.getLogger(__name__)
 # Debugging utils
 
 
-def ax_dump_element(parent, depth=None):
+def ax_dump_element(hax_parent, depth=None):
     r = []
 
-    def traverse(index, element, level):
-        if element is None:
+    def traverse(index, hax, level):
+        if hax is None:
             return
 
-        if ax_attr(element, "AXRole", "") == "AXStaticText":
-            value = ax_attr(element, "AXValue", "(n/a)")
+        if hax.role == "AXStaticText":
+            value = hax.value
             r.append("_" * level + " " + str(index) + " " + value)
         else:
             r.append(
@@ -33,29 +33,30 @@ def ax_dump_element(parent, depth=None):
                 + " "
                 + str(index)
                 + " <"
-                + ax_attr(element, "AXRole", "")
+                + hax.role
                 + " "
-                + ax_dump_attrs(element)
+                + ax_dump_attrs(hax)
                 + ">"
             )
 
         if depth is not None and level == depth:
             return
 
-        children = ax_attr(element, "AXChildren", [])
+        children = hax.children
         for i, child in enumerate(children):
             traverse(i, child, level + 1)
 
-    traverse(0, parent, 0)
+    traverse(0, hax_parent, 0)
     return "\n".join(r)
 
 
-def ax_dump_attrs(element):
+def ax_dump_attrs(hax):
     r = []
-    attribute_names = ApplicationServices.AXUIElementCopyAttributeNames(element, None)
-    if not attribute_names[1]:
+    attribute_names = hax._dir()
+    if not attribute_names:
         return ""
-    for attribute in attribute_names[1]:
+
+    for attribute in attribute_names:
         if attribute not in {
             "AXTitle",
             "AXDescription",
@@ -63,12 +64,12 @@ def ax_dump_attrs(element):
             "AXDOMIdentifier",
         }:
             continue
-        value = ApplicationServices.AXUIElementCopyAttributeValue(
-            element, attribute, None
-        )
-        if not value[1]:
+
+        value = hax._get(attribute, None)
+        if value is None:
             continue
-        r.append(f"{attribute}={str(value[1]).replace('\n', '')}")
+
+        r.append(f"{attribute}={str(value).replace('\n', '')}")
     return " ".join(r)
 
 
@@ -92,6 +93,15 @@ class HAX:
 
     def _get(self, name, default=not_set):
         return ax_attr(self.elem, name, default)
+
+    def _dir(self):
+        """Get all attribute names for this element."""
+        error, attribute_names = ApplicationServices.AXUIElementCopyAttributeNames(
+            self.elem, None
+        )
+        if error:
+            return []
+        return attribute_names
 
     @property
     def role(self):
@@ -175,7 +185,7 @@ class HAX:
         return "".join(ret)
 
     def repr(self, depth=None):
-        return ax_dump_element(self.elem, depth)
+        return ax_dump_element(self, depth)
 
     def __repr__(self):
         return self.repr(0)
@@ -245,10 +255,11 @@ def run_auto_continue(window, dry_run):
         return
     log.info("Found 'hit the max length' at end of chat")
     textareas = window.findall(
-        lambda e: e.role == "AXTextArea"
-        and "ProseMirror" in e.dom_class_list
+        lambda e: e.role == "AXTextArea" and "ProseMirror" in e.dom_class_list
     )
-    assert len(textareas) == 1, "\n".join([e.repr() for e in window.findall(lambda e: e.role == "AXTextArea")])
+    assert len(textareas) == 1, "\n".join(
+        [e.repr() for e in window.findall(lambda e: e.role == "AXTextArea")]
+    )
     (textarea,) = textareas
     if (contents := textarea.value) not in (
         "",
@@ -260,10 +271,8 @@ def run_auto_continue(window, dry_run):
         log.info("Stopping now because of --dry-run")
         return
     textarea.value = "Continue"
-    (send_button,) = (
-        window.findall(
-            lambda e: e.role == "AXButton" and e.description == "Send Message",
-        )
+    (send_button,) = window.findall(
+        lambda e: e.role == "AXButton" and e.description == "Send Message",
     )
     send_button.press()
 
