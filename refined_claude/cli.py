@@ -7,6 +7,7 @@ import time
 import logging
 import subprocess
 import json
+import re
 from collections import defaultdict
 from .logging import init_logging
 
@@ -222,8 +223,8 @@ class HAX:
 # Auto approve
 
 
-def run_auto_approve(window, dry_run):
-    buttons = window.findall(
+def run_auto_approve(web_view, dry_run):
+    buttons = web_view.findall(
         lambda e: e.role == "AXButton" and e.title == "Allow for This Chat"
     )
     assert len(buttons) <= 1
@@ -242,12 +243,12 @@ def run_auto_approve(window, dry_run):
 # Auto continue
 
 
-def run_auto_continue(window, dry_run):
-    max_length_msgs = window.findall(
+def run_auto_continue(web_view, dry_run):
+    max_length_msgs = web_view.findall(
         lambda e: e.role == "AXStaticText"
         and "hit the max length for a message" in e.value
     )
-    retry_buttons = window.findall(
+    retry_buttons = web_view.findall(
         lambda e: e.role == "AXButton" and e.title == "Retry",
     )
     watermark = max((e.ypos for e in max_length_msgs), default=None)
@@ -261,11 +262,11 @@ def run_auto_continue(window, dry_run):
         )
         return
     log.info("Found 'hit the max length' at end of chat")
-    textareas = window.findall(
+    textareas = web_view.findall(
         lambda e: e.role == "AXTextArea" and "ProseMirror" in e.dom_class_list
     )
     assert len(textareas) == 1, "\n".join(
-        [e.repr() for e in window.findall(lambda e: e.role == "AXTextArea")]
+        [e.repr() for e in web_view.findall(lambda e: e.role == "AXTextArea")]
     )
     (textarea,) = textareas
     if (contents := textarea.value) not in (
@@ -278,7 +279,7 @@ def run_auto_continue(window, dry_run):
         log.info("Stopping now because of --dry-run")
         return
     textarea.value = "Continue"
-    (send_button,) = window.findall(
+    (send_button,) = web_view.findall(
         lambda e: e.role == "AXButton" and e.description == "Send Message",
     )
     send_button.press()
@@ -287,8 +288,8 @@ def run_auto_continue(window, dry_run):
 # Notify on complete
 
 
-def run_notify_on_complete(window, running: list[int]):
-    stop_response = window.findall(
+def run_notify_on_complete(web_view, running: list[int]):
+    stop_response = web_view.findall(
         lambda e: e.role == "AXButton" and e.description == "Stop Response",
     )
     if running[0] and not stop_response:
@@ -309,7 +310,8 @@ def run_notify_on_complete(window, running: list[int]):
 # Snapshot history
 
 
-def find_chat_content_element(window):
+def extract_web_view(window):
+    """Extract the web view from the window."""
     match window:
         case HAX(
             children_by_class={
@@ -341,14 +343,23 @@ def find_chat_content_element(window):
             log.error("Couldn't find WebArea: %s", window.repr(5))
             return None
 
-    # Get the URL from web_area if it exists using the url property
-    url_str = web_area.url
+    return web_area
+
+
+def is_claude_chat_url(web_view):
+    """Check if the web view URL is a Claude chat URL."""
+    url_str = web_view.url
     if url_str is not None:
         log.info("Found WebArea URL: %s", url_str)
+        return re.match(r"https://claude\.ai/chat/[0-9a-f-]+", url_str) is not None
     else:
         log.info("No AXURL attribute found in WebArea")
+        return False
 
-    match web_area:
+
+def find_chat_content_element(web_view):
+    """Find the chat content element in the web view."""
+    match web_view:
         case HAX(
             children=[
                 HAX(
@@ -362,7 +373,7 @@ def find_chat_content_element(window):
         ):
             log.info("Found target content group: %s", target_group.repr(0))
         case _:
-            log.error("Couldn't find content group: %s", web_area.repr(3))
+            log.error("Couldn't find content group: %s", web_view.repr(3))
             return None
 
     return target_group
@@ -462,9 +473,9 @@ def parse_messages(parent):
     return "\n\n----\n\n".join(ret)
 
 
-def run_snapshot_history(window, output_file=None):
+def run_snapshot_history(web_view, output_file=None):
     """Capture text content from the chat and optionally save to a file."""
-    content_element = find_chat_content_element(window)
+    content_element = find_chat_content_element(web_view)
     if not content_element:
         log.info("Could not find chat content element")
         return
@@ -523,14 +534,26 @@ def cli(
         log.info("Start iteration")
         for window in windows:
             log.info("Window %s", window)
+            # Extract web view first
+            web_view = extract_web_view(window)
+            if web_view is None:
+                log.info("Could not extract web view, skipping")
+                continue
+
+            # Check if the URL is a Claude chat URL
+            if not is_claude_chat_url(web_view):
+                log.info("Not a Claude chat URL, skipping")
+                continue
+
+            # Only perform operations if we have a valid web view with Claude chat URL
             if auto_approve:
-                run_auto_approve(window, dry_run)
+                run_auto_approve(web_view, dry_run)
             if auto_continue:
-                run_auto_continue(window, dry_run)
+                run_auto_continue(web_view, dry_run)
             if notify_on_complete:
-                run_notify_on_complete(window, running)
+                run_notify_on_complete(web_view, running)
             if snapshot_history:
-                run_snapshot_history(window, snapshot_history)
+                run_snapshot_history(web_view, snapshot_history)
         if once:
             return
         time.sleep(1)
