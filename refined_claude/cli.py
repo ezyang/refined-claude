@@ -7,6 +7,7 @@ import time
 import logging
 import subprocess
 import json
+from collections import defaultdict
 from .logging import init_logging
 
 
@@ -16,7 +17,8 @@ log = logging.getLogger(__name__)
 # Debugging utils
 
 
-def ax_dump_element(parent):
+
+def ax_dump_element(parent, depth=None):
     r = []
 
     def traverse(index, element, level):
@@ -38,6 +40,9 @@ def ax_dump_element(parent):
                 + ">"
             )
 
+        if depth is not None and level == depth:
+            return
+
         children = ax_attr(element, "AXChildren", [])
         for i, child in enumerate(children):
             traverse(i, child, level + 1)
@@ -49,6 +54,8 @@ def ax_dump_element(parent):
 def ax_dump_attrs(element):
     r = []
     attribute_names = ApplicationServices.AXUIElementCopyAttributeNames(element, None)
+    if not attribute_names[1]:
+        return ""
     for attribute in attribute_names[1]:
         if attribute not in {
             "AXTitle",
@@ -67,6 +74,74 @@ def ax_dump_attrs(element):
 
 
 # Utilities
+
+
+class HAX:
+    def __init__(self, elem):
+        self.elem = elem  # underlying pyobjc
+
+    def _get(self, name, default=not_set):
+        return ax_attr(self.elem, name, default)
+
+    @property
+    def role(self):
+        return self._get("AXRole")
+
+    @property
+    def dom_class_list(self):
+        # Return a dict rather than set so we can pattern match on it
+        # TODO: defaultdict maybe?
+        return {k: True for k in self._get("AXDOMClassList", [])}
+
+    @property
+    def children(self):
+        return [HAX(e) for e in self._get("AXChildren", [])]
+
+    @property
+    def title(self):
+        return self._get("AXTitle", "")
+
+    @property
+    def description(self):
+        return self._get("AXDescription", "")
+
+    @property
+    def windows(self):
+        return self._get("AXWindows", "")
+
+    @property
+    def value(self):
+        return self._get("AXValue", "")
+
+    @property
+    def children_by_class(self):
+        ret = defaultdict(list)
+        for c in self.children:
+            for k in c.dom_class_list:
+                ret[k].append(c)
+        return ret
+
+    def repr(self, depth):
+        return ax_dump_element(self.elem, depth)
+
+    def __repr__(self):
+        return self.repr(0)
+
+    def findall(self, pred):
+        results = []
+
+        def traverse(element):
+            if element is None:
+                return
+            if pred(element):
+                results.append(element)
+            for child in element.children:
+                traverse(child)
+
+        traverse(parent)
+        return results
+
+    # TODO: children_by_XXX
 
 
 def ax_attr(element, attribute, default=not_set):
@@ -182,11 +257,10 @@ def parse_messages(parent):
         if 'group/thumbnail' in message_classes:
             log.info("skipping thumbnail at %s", i)
             continue
-        if 'group' in message_classes:
-            assert len(ax_children(message)) == 1, ax_dump_element(message)
-            inner_message = ax_children(message)[0]
-        else:
-            inner_message = message
+        #if 'group' in message_classes:
+        #    inner_message = ax_children(message)[0]
+        #else:
+        inner_message = message
         ret_message = []  # paragraphs
         inner_message_classes = ax_attr(inner_message, "AXDOMClassList", [])
         if "w-8" in inner_message_classes:
@@ -219,11 +293,7 @@ def parse_messages(parent):
 
 
 def run_auto_approve(window, dry_run):
-    buttons = ax_findall(
-        window,
-        lambda e: ax_attr(e, "AXRole", "") == "AXButton"
-        and ax_attr(e, "AXTitle", "") == "Allow for This Chat",
-    )
+    buttons = window.findall(lambda e: e.role == "AXButton" and e.title == "Allow for This Chat")
     assert len(buttons) <= 1
     if not buttons:
         return
@@ -315,42 +385,36 @@ def run_notify_on_complete(window, running: list[int]):
 
 
 def find_chat_content_element(window):
-    # TODO: Short circuit traversal
-    web_areas = ax_findall(window, lambda e: ax_attr(e, "AXRole", "") == "AXWebArea")
-    if len(web_areas) < 2:
-        log.error("Could not find at least two AXWebArea elements, %s", web_areas)
-        log.info(ax_dump_element(window))
-        return None
-    web_area = web_areas[1]
-    log.info(
-        "Found target AXWebArea (second instance): %s out of %s",
-        web_area,
-        len(web_areas),
-    )
+    window = HAX(window)
+    match window:
+        case HAX(children_by_class={"RootView": [
+            HAX(children_by_class={"NonClientView": [
+                HAX(children_by_class={"NativeFrameViewMac": [
+                    HAX(children_by_class={"ClientView": [
+                        HAX(children=[_, web_area])
+                    ]})
+                ]})
+            ]})
+        ]}):
+            log.info("Found WebArea: %s", web_area.repr(0))
+        case _:
+            log.error("Couldn't find WebArea: %s", window.repr(5))
+            return None
 
-    if len(ax_children(web_area)) == 1:
-        web_area = ax_children(web_area)[0]
+    match web_area:
+        case HAX(children=[
+            HAX(children_by_class={"w-full": [
+                HAX(children_by_class={"relative": [
+                    target_group
+                ]})
+            ]})
+        ]):
+            log.info("Found target content group: %s", target_group.repr(0))
+        case _:
+            log.error("Couldn't find content group: %s", web_area.repr(3))
+            return None
 
-    # Drill down 1
-    for c in ax_attr(web_area, "AXChildren", []):
-        if "w-full" in ax_attr(c, "AXDOMClassList", []):
-            break
-    else:
-        log.error("couldn't find relevant child 1")
-        return None
-    g = c
-
-    # Drill down 2
-    for c in ax_attr(g, "AXChildren", []):
-        if "relative" in ax_attr(c, "AXDOMClassList", []):
-            break
-    else:
-        log.error("couldn't find relevant child 2")
-        return None
-    target_group = c
-
-    log.info("Found target content group: %s", target_group)
-    return target_group
+    return target_group.elem
 
 
 def run_snapshot_history(window, output_file=None):
@@ -401,12 +465,12 @@ def cli(
     # requery every loop iteration
     apps = AppKit.NSWorkspace.sharedWorkspace().runningApplications()
     claude_apps = [
-        ApplicationServices.AXUIElementCreateApplication(app.processIdentifier())
+        HAX(ApplicationServices.AXUIElementCreateApplication(app.processIdentifier()))
         for app in apps
         if app.localizedName() == "Claude"
     ]
     log.info("Apps: %s", claude_apps)
-    windows = [window for app in claude_apps for window in ax_attr(app, "AXWindows")]
+    windows = [window for app in claude_apps for window in app.windows]
     running = [False]
     log.info("Windows: %s", windows)
 
