@@ -249,7 +249,7 @@ def run_auto_continue(web_view, dry_run):
         and "hit the max length for a message" in e.value
     )
     retry_buttons = web_view.findall(
-        lambda e: e.role == "AXButton" and e.title == "Retry",
+        lambda e: e.role in ("AXButton", "AXPopUpButton") and e.title == "Retry",
     )
     watermark = max((e.ypos for e in max_length_msgs), default=None)
     if watermark is None:
