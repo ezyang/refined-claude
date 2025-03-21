@@ -73,6 +73,17 @@ def ax_dump_attrs(element):
     return " ".join(r)
 
 
+def ax_attr(element, attribute, default=not_set):
+    error, value = ApplicationServices.AXUIElementCopyAttributeValue(
+        element, attribute, None
+    )
+    if error:
+        if default is not not_set:
+            return default
+        raise ValueError(f"Error getting attribute {attribute}: {error}")
+    return value
+
+
 # Utilities
 
 
@@ -107,11 +118,21 @@ class HAX:
 
     @property
     def windows(self):
-        return self._get("AXWindows", "")
+        return [HAX(w) for w in self._get("AXWindows", "")]
 
     @property
     def value(self):
         return self._get("AXValue", "")
+
+    @value.setter
+    def value(self, v):
+        result = HIServices.AXUIElementSetAttributeValue(self.elem, "AXValue", v)
+        if result != 0:
+            raise RuntimeError(f"Failed to set value on {self}")
+
+    @property
+    def parent(self):
+        return self._get("AXParent", "")
 
     @property
     def children_by_class(self):
@@ -121,12 +142,46 @@ class HAX:
                 ret[k].append(c)
         return ret
 
+    @property
+    def ypos(e):
+        pos = str(self._get("AXPosition"))
+        if "y:" in pos:
+            y_part = pos.split("y:")[1].split()[0]
+            return float(y_part)
+        else:
+            return 0.0
+
+    def inner_text(self):
+        """Flatten element into plain text only (space separated).  Use as terminal
+        rendering call; also good for debugging."""
+        ret = []
+
+        def traverse(element):
+            if element is None:
+                return
+
+            if element.role == "AXStaticText":
+                value = element.value
+                if value:
+                    ret.append(value)
+
+            for child in element.children:
+                traverse(child)
+
+        traverse(self)
+        return "".join(ret)
+
     def repr(self, depth):
         return ax_dump_element(self.elem, depth)
 
     def __repr__(self):
         return self.repr(0)
 
+    def press(self):
+        HIServices.AXUIElementPerformAction(self.elem, "AXPress")
+
+    # TODO: caching mechanism
+    # TODO: do the traversal once
     def findall(self, pred):
         results = []
 
@@ -144,152 +199,7 @@ class HAX:
     # TODO: children_by_XXX
 
 
-def ax_attr(element, attribute, default=not_set):
-    error, value = ApplicationServices.AXUIElementCopyAttributeValue(
-        element, attribute, None
-    )
-    if error:
-        if default is not not_set:
-            return default
-        raise ValueError(f"Error getting attribute {attribute}: {error}")
-    return value
-
-
-def ax_role(element):
-    return ax_attr(element, "AXRole", "")
-
-
-def ax_children(element):
-    return ax_attr(element, "AXChildren", [])
-
-
-def ax_dom_class_list(element):
-    return ax_attr(element, "AXDOMClassList", [])
-
-
-def ax_ypos(e):
-    pos = str(ax_attr(e, "AXPosition", ""))
-    if "y:" in pos:
-        y_part = pos.split("y:")[1].split()[0]
-        return float(y_part)
-    else:
-        return 0.0
-
-
-def ax_findall(parent, pred):
-    results = []
-
-    def traverse(element):
-        if element is None:
-            return
-
-        if pred(element):
-            results.append(element)
-
-        children = ax_attr(element, "AXChildren", [])
-        for child in children:
-            traverse(child)
-
-    traverse(parent)
-    return results
-
-
-def parse_text(t):
-    """Flatten element into plain text only (space separated).  Use as terminal
-    rendering call; also good for debugging."""
-    ret = []
-
-    def traverse(element):
-        if element is None:
-            return
-
-        if ax_role(element) == "AXStaticText":
-            value = ax_attr(element, "AXValue")
-            if value:
-                ret.append(value)
-
-        for child in ax_children(element):
-            traverse(child)
-
-    traverse(t)
-    return "".join(ret)
-
-
-def parse_para(para):
-    """Parse a paragraph into lines, handling lists as well.  Conventionally
-    these lines are joined together with a single newline."""
-    role = ax_role(para)
-    ret = []
-    if role == "AXGroup":
-        ret.append(parse_text(para))
-    elif role == "AXList":
-        is_bullet = "list-disc" in ax_dom_class_list(para)
-        for i, t in enumerate(ax_children(para)):
-            parsed_t = parse_para(t)
-            if not parsed_t:
-                # Still generate an empty bullet
-                parsed_t = [""]
-            if is_bullet:
-                leader = "* "
-            else:
-                leader = f"{i + 1}. "
-            indent = " " * len(leader)
-            ret.append(leader + parsed_t[0].strip())
-            ret.extend(indent + x.strip() for x in parsed_t[1:])
-    else:
-        log.info("unrecognized %s", role)
-        ret.append(parse_text(para))
-    return ret
-
-
-def parse_messages(parent):
-    """Parse interleaved user/assistant messages"""
-    # TODO: Make the output result more structured
-
-    ZOOM = 1
-
-    messages = ax_attr(parent, "AXChildren", [])
-    ret = []  # messages
-    for i, message in enumerate(messages):
-        if i != ZOOM:
-            continue
-        message_classes = ax_attr(message, "AXDOMClassList", [])
-        if 'group/thumbnail' in message_classes:
-            log.info("skipping thumbnail at %s", i)
-            continue
-        #if 'group' in message_classes:
-        #    inner_message = ax_children(message)[0]
-        #else:
-        inner_message = message
-        ret_message = []  # paragraphs
-        inner_message_classes = ax_attr(inner_message, "AXDOMClassList", [])
-        if "w-8" in inner_message_classes:
-            log.info("skipping %s message trailer", len(messages) - 1)
-            break
-        if "font-claude-message" in inner_message_classes:
-            label = "Assistant: "
-            log.info("assistant message %s", parse_text(inner_message)[:40])
-            # assistant message
-            for j, para in enumerate(ax_children(inner_message)):
-                if "absolute" in ax_attr(para, "AXDOMClassList", []):
-                    break  # message end
-                ret_message.append("\n".join(parse_para(para)))
-        else:
-            label = "User: "
-            log.info("user message %s", parse_text(inner_message)[:40])
-            for j, para in enumerate(ax_children(inner_message)):
-                if j == 0:
-                    continue  # skip username
-                if "absolute" in ax_attr(para, "AXDOMClassList", []):
-                    break  # message end
-                ret_message.append("\n".join(parse_para(para)))
-        ret.append(label + "\n\n" + "\n\n".join(ret_message))
-        if i == ZOOM:
-            print("#####")
-            print(ax_dump_element(message))
-            break
-
-    return "\n\n----\n\n".join(ret)
+# Auto approve
 
 
 def run_auto_approve(window, dry_run):
@@ -303,46 +213,36 @@ def run_auto_approve(window, dry_run):
     if dry_run:
         log.info("Stopping now because of --dry-run")
         return
-    HIServices.AXUIElementPerformAction(button, "AXPress")
+    button.press()
     log.info("Pressed button")
 
 
+# Auto continue
+
+
 def run_auto_continue(window, dry_run):
-    max_length_msgs = ax_findall(
-        window,
-        lambda e: ax_attr(e, "AXRole", "") == "AXStaticText"
-        and "hit the max length for a message" in ax_attr(e, "AXValue", ""),
+    max_length_msgs = window.findall(lambda e: e.role == "AXStaticText" and "hit the max length for a message" in e.value)
+    retry_buttons = window.findall(
+        lambda e: e.role == "AXButton"
+        and e.title == "Retry",
     )
-    retry_buttons = ax_findall(
-        window,
-        lambda e: ax_attr(e, "AXRole", "") == "AXButton"
-        and ax_attr(e, "AXTitle", "") == "Retry",
-    )
-    watermark = max((ax_ypos(e) for e in max_length_msgs), default=None)
+    watermark = max((e.ypos for e in max_length_msgs), default=None)
     if watermark is None:
         return
     log.info("Max length y-pos watermark is %s", watermark)
-    if (retries_after := sum(1 for e in retry_buttons if ax_ypos(e) > watermark)) != 1:
+    if (retries_after := sum(1 for e in retry_buttons if e.ypos > watermark)) != 1:
         log.info(
             "But there were %s Retry buttons after, so not at end of chat",
             retries_after,
         )
         return
     log.info("Found 'hit the max length' at end of chat")
-    (textarea,) = ax_findall(
-        window,
-        lambda e: ax_attr(e, "AXRole", "") == "AXTextArea"
-        and (
-            parent := ax_attr(
-                e,
-                "AXParent",
-                None
-                and parent is not None
-                and ax_attr(parent, "AXTitle", "") == "Write your prompt to Claude",
-            )
-        ),
+    (textarea,) = window.findall(
+        lambda e: e.role == "AXTextArea"
+        and (parent := e.parent) is not None
+        and parent.title == "Write your prompt to Claude"
     )
-    if (contents := ax_attr(textarea, "AXValue", "")) not in (
+    if (contents := textarea.value) not in (
         "",
         "Reply to Claude...\n",
     ):
@@ -351,23 +251,21 @@ def run_auto_continue(window, dry_run):
     if dry_run:
         log.info("Stopping now because of --dry-run")
         return
-    result = HIServices.AXUIElementSetAttributeValue(textarea, "AXValue", "Continue")
-    if result != 0:
-        log.info("Failed to set values: %s", result)
-        return
-    (send_button,) = ax_findall(
-        window,
-        lambda e: ax_attr(e, "AXRole", "") == "AXButton"
-        and ax_attr(e, "AXDescription", "") == "Send Message",
+    textarea.value = "Continue"
+    (send_button,) = window,findall(
+        lambda e: e.role == "AXButton"
+        and e.description == "Send Message",
     )
-    HIServices.AXUIElementPerformAction(send_button, "AXPress")
+    send_button.press()
+
+
+# Notify on complete
 
 
 def run_notify_on_complete(window, running: list[int]):
-    stop_response = ax_findall(
-        window,
-        lambda e: ax_attr(e, "AXRole", "") == "AXButton"
-        and ax_attr(e, "AXDescription", "") == "Stop Response",
+    stop_response = window.findall(
+        lambda e: e.role == "AXButton"
+        and e.description == "Stop Response",
     )
     if running[0] and not stop_response:
         log.info("Detected chat response finished")
@@ -384,8 +282,10 @@ def run_notify_on_complete(window, running: list[int]):
         running[0] = True
 
 
+# Snapshot history
+
+
 def find_chat_content_element(window):
-    window = HAX(window)
     match window:
         case HAX(children_by_class={"RootView": [
             HAX(children_by_class={"NonClientView": [
@@ -414,7 +314,84 @@ def find_chat_content_element(window):
             log.error("Couldn't find content group: %s", web_area.repr(3))
             return None
 
-    return target_group.elem
+    return target_group
+
+
+def parse_para(para):
+    """Parse a paragraph into lines, handling lists as well.  Conventionally
+    these lines are joined together with a single newline."""
+    role = para.role
+    ret = []
+    if role == "AXGroup":
+        ret.append(para.inner_text())
+    elif role == "AXList":
+        is_bullet = "list-disc" in para.dom_class_list
+        for i, t in enumerate(para.children):
+            parsed_t = parse_para(t)
+            if not parsed_t:
+                # Still generate an empty bullet
+                parsed_t = [""]
+            if is_bullet:
+                leader = "* "
+            else:
+                leader = f"{i + 1}. "
+            indent = " " * len(leader)
+            ret.append(leader + parsed_t[0].strip())
+            ret.extend(indent + x.strip() for x in parsed_t[1:])
+    else:
+        log.info("unrecognized %s", role)
+        ret.append(para.inner_text())
+    return ret
+
+
+def parse_messages(parent):
+    """Parse interleaved user/assistant messages"""
+    # TODO: Make the output result more structured
+
+    ZOOM = 1
+
+    messages = parent.children
+    ret = []  # messages
+    for i, message in enumerate(messages):
+        if i != ZOOM:
+            continue
+        message_classes = message.dom_class_list
+        if 'group/thumbnail' in message_classes:
+            log.info("skipping thumbnail at %s", i)
+            continue
+        #if 'group' in message_classes:
+        #    inner_message = ax_children(message)[0]
+        #else:
+        inner_message = message
+        ret_message = []  # paragraphs
+        inner_message_classes = inner_message.dom_class_list
+        if "w-8" in inner_message_classes:
+            log.info("skipping %s message trailer", len(messages) - 1)
+            break
+        if "font-claude-message" in inner_message_classes:
+            label = "Assistant: "
+            log.info("assistant message %s", inner_message.inner_text()[:40])
+            # assistant message
+            for j, para in enumerate(inner_message.children):
+                if "absolute" in ax_attr(para, "AXDOMClassList", []):
+                    break  # message end
+                ret_message.append("\n".join(parse_para(para)))
+        else:
+            label = "User: "
+            log.info("user message %s", inner_message.inner_text()[:40])
+            for j, para in enumerate(inner_message.children):
+                if j == 0:
+                    continue  # skip username
+                if "absolute" in ax_attr(para, "AXDOMClassList", []):
+                    break  # message end
+                ret_message.append("\n".join(parse_para(para)))
+        ret.append(label + "\n\n" + "\n\n".join(ret_message))
+        if i == ZOOM:
+            print("#####")
+            print(message.repr(None))
+            break
+
+    return "\n\n----\n\n".join(ret)
 
 
 def run_snapshot_history(window, output_file=None):
