@@ -517,21 +517,25 @@ def cli(
     once: bool,
 ):
     init_logging()
-    # NB: Claude is only queried at process start (maybe add an option to
-    # requery every loop iteration
-    apps = AppKit.NSWorkspace.sharedWorkspace().runningApplications()
-    claude_apps = [
-        HAX(ApplicationServices.AXUIElementCreateApplication(app.processIdentifier()))
-        for app in apps
-        if app.localizedName() == "Claude"
-    ]
-    log.info("Apps: %s", claude_apps)
-    windows = [window for app in claude_apps for window in app.windows]
-    running = [False]
-    log.info("Windows: %s", windows)
 
     while True:
         log.info("Start iteration")
+        # NB: Claude is only queried at process start (maybe add an option to
+        # requery every loop iteration
+        apps = AppKit.NSWorkspace.sharedWorkspace().runningApplications()
+        claude_apps = [
+            HAX(
+                ApplicationServices.AXUIElementCreateApplication(
+                    app.processIdentifier()
+                )
+            )
+            for app in apps
+            if app.localizedName() == "Claude"
+        ]
+        log.info("Apps: %s", claude_apps)
+        windows = [window for app in claude_apps for window in app.windows]
+        running = [False]
+        log.info("Windows: %s", windows)
         for window in windows:
             log.info("Window %s", window)
             # Extract web view first
