@@ -41,4 +41,6 @@ cd refined-claude
 uv tool install . --reinstall
 ```
 
+## Troubleshooting
 
+Sometimes, refined-claude will fail to find the WebView on your open window.  This can happen if Claude is opened after you run refined-claude, or if you open refined-claude too soon after opening Claude.  Unfortunately, the most reliable way to fix this problem is to restart refined-claude.
