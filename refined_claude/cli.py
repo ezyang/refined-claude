@@ -279,9 +279,13 @@ def run_auto_continue(web_view, dry_run):
         log.info("Stopping now because of --dry-run")
         return
     textarea.value = "Continue"
-    (send_button,) = web_view.findall(
+    send_buttons = web_view.findall(
         lambda e: e.role == "AXButton" and e.description == "Send Message",
     )
+    if not send_buttons:
+        log.warning("No send button found, skipping auto-continue")
+        return
+    send_button = send_buttons[0]
     send_button.press()
 
 
