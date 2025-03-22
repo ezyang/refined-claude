@@ -297,13 +297,13 @@ def run_auto_continue(web_view, dry_run):
 # Notify on complete
 
 
-def run_notify_on_complete(web_view, running: list[int]):
+def run_notify_on_complete(web_view, running: list[int], i: int):
     stop_response = web_view.findall(
         lambda e: e.role == "AXButton" and e.description == "Stop Response",
     )
-    if running[0] and not stop_response:
+    if running[i] and not stop_response:
         log.info("Detected chat response finished")
-        running[0] = False
+        running[i] = False
         subprocess.check_call(
             [
                 "osascript",
@@ -311,9 +311,9 @@ def run_notify_on_complete(web_view, running: list[int]):
                 'display notification "Claude response finished" with title "Claude" sound name "Glass"',
             ]
         )
-    elif not running[0] and stop_response:
+    elif not running[i] and stop_response:
         log.info("Detected chat response started")
-        running[0] = True
+        running[i] = True
 
 
 # Snapshot history
@@ -536,12 +536,12 @@ def cli(
     ]
     log.info("Apps: %s", claude_apps)
     windows = [window for app in claude_apps for window in app.windows]
-    running = [False]
+    running = [False] * len(windows)
     log.info("Windows: %s", windows)
 
     while True:
         log.info("Start iteration")
-        for window in windows:
+        for i, window in enumerate(windows):
             log.info("Window %s", window)
             # Extract web view first
             web_view = extract_web_view(window)
@@ -560,7 +560,7 @@ def cli(
             if auto_continue:
                 run_auto_continue(web_view, dry_run)
             if notify_on_complete:
-                run_notify_on_complete(web_view, running)
+                run_notify_on_complete(web_view, running, i)
             if snapshot_history:
                 run_snapshot_history(web_view, snapshot_history)
         if once:
