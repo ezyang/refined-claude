@@ -246,7 +246,8 @@ def run_auto_approve(web_view, dry_run):
 def run_auto_continue(web_view, dry_run):
     max_length_msgs = web_view.findall(
         lambda e: e.role == "AXStaticText"
-        and "hit the max length for a message" in e.value
+        # Intentionally broken to avoid self trigger
+        and "hit the max" + " length for a message" in e.value
     )
     watermark = max((e.ypos for e in max_length_msgs), default=None)
     if watermark is None:
