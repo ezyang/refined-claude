@@ -29,7 +29,7 @@ With a running instance of Claude Desktop, just run this in the background:
 refined-claude
 ```
 
-You can disable various features using ``--no-auto-approve`` or ``--no-auto-continue``.
+You can disable various features using ``--no-auto-approve`` or ``--no-auto-continue``. Use ``--no-default-features`` to disable all features by default (you can then selectively enable specific features as needed).
 
 ## Development
 

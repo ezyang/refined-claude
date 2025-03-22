@@ -506,26 +506,71 @@ def run_snapshot_history(web_view, output_file=None):
 
 
 @click.command()
-@click.option("--auto-approve/--no-auto-approve", default=True)
-@click.option("--auto-continue/--no-auto-continue", default=True)
-@click.option("--notify-on-complete/--no-notify-on-complete", default=True)
+@click.option(
+    "--auto-approve/--no-auto-approve",
+    default=None,
+    help="Automatically approve tool usage requests (in default set)",
+)
+@click.option(
+    "--auto-continue/--no-auto-continue",
+    default=None,
+    help="Automatically continue chats when they hit the reply size limit (in default set)",
+)
+@click.option(
+    "--notify-on-complete/--no-notify-on-complete",
+    default=None,
+    help="Send a notification when Claude finishes responding (in default set)",
+)
 @click.option(
     "--snapshot-history",
     type=click.Path(),
     default=None,
     help="Capture chat content and save to specified file",
 )
-@click.option("--dry-run/--no-dry-run", default=False)
-@click.option("--once/--no-once", default=False)
+@click.option(
+    "--dry-run/--no-dry-run",
+    default=False,
+    help="Don't make any changes, just log what would happen",
+)
+@click.option(
+    "--once/--no-once",
+    default=False,
+    help="Run once and exit instead of running continuously",
+)
+@click.option(
+    "--default-features/--no-default-features",
+    default=True,
+    help="Use default values for features when not explicitly specified",
+)
 def cli(
-    auto_approve: bool,
-    auto_continue: bool,
-    notify_on_complete: bool,
-    snapshot_history: str,
+    auto_approve: bool | None,
+    auto_continue: bool | None,
+    notify_on_complete: bool | None,
+    snapshot_history: str | None,
     dry_run: bool,
     once: bool,
+    default_features: bool,
 ):
     init_logging()
+
+    # Set default values for flags that are None
+    if default_features:
+        # Default values for each flag if not explicitly set
+        if auto_approve is None:
+            auto_approve = True
+        if auto_continue is None:
+            auto_continue = True
+        if notify_on_complete is None:
+            notify_on_complete = True
+    else:
+        # When default_features is False, ensure no flags are None
+        # We'll go with a conservative default of False for all features
+        if auto_approve is None:
+            auto_approve = False
+        if auto_continue is None:
+            auto_continue = False
+        if notify_on_complete is None:
+            notify_on_complete = False
     # NB: Claude is only queried at process start (maybe add an option to
     # requery every loop iteration
     apps = AppKit.NSWorkspace.sharedWorkspace().runningApplications()
