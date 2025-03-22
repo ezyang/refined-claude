@@ -30,3 +30,15 @@ refined-claude
 ```
 
 You can disable various features using ``--no-auto-approve`` or ``--no-auto-continue``.
+
+## Development
+
+Clone the repo and install the development version tool using `pip`:
+
+```bash
+git clone https://github.com/ezyang/refined-claude.git
+cd refined-claude
+uv tool install . --reinstall
+```
+
+
