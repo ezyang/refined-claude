@@ -270,9 +270,11 @@ def run_auto_continue(web_view, dry_run):
     textareas = web_view.findall(
         lambda e: e.role == "AXTextArea" and "ProseMirror" in e.dom_class_list
     )
-    assert len(textareas) == 1, "\n".join(
-        [e.repr() for e in web_view.findall(lambda e: e.role == "AXTextArea")]
-    )
+    if len(textareas) != 1:
+        log.warning("Can't find textarea: %s", "\n".join(
+            [e.repr() for e in web_view.findall(lambda e: e.role == "AXTextArea")]
+        ))
+        return
     (textarea,) = textareas
     if (contents := textarea.value) not in (
         "",
