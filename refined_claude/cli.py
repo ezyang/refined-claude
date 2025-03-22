@@ -248,17 +248,21 @@ def run_auto_continue(web_view, dry_run):
         lambda e: e.role == "AXStaticText"
         and "hit the max length for a message" in e.value
     )
-    retry_buttons = web_view.findall(
-        lambda e: e.role in ("AXButton", "AXPopUpButton") and e.title == "Retry",
-    )
     watermark = max((e.ypos for e in max_length_msgs), default=None)
     if watermark is None:
         return
     log.info("Max length y-pos watermark is %s", watermark)
-    if (retries_after := sum(1 for e in retry_buttons if e.ypos > watermark)) != 1:
+
+    # Find messages with font-claude-message class
+    claude_messages = web_view.findall(
+        lambda e: "font-claude-message" in e.dom_class_list
+    )
+
+    # Check if there are any Claude messages after our max length message
+    if (messages_after := sum(1 for e in claude_messages if e.ypos > watermark)) != 0:
         log.info(
-            "But there were %s Retry buttons after, so not at end of chat",
-            retries_after,
+            "But there were %s Claude messages after, so not at end of chat",
+            messages_after,
         )
         return
     log.info("Found 'hit the max length' at end of chat")
