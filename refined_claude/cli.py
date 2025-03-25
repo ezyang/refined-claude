@@ -243,37 +243,86 @@ def run_auto_approve(web_view, dry_run):
 # Auto continue
 
 
-def run_auto_continue(web_view, dry_run):
-    max_length_msgs = web_view.findall(
-        lambda e: e.role == "AXStaticText"
-        # Intentionally broken to avoid self trigger
-        and "hit the max" + " length for a message" in e.value
-    )
-    watermark = max((e.ypos for e in max_length_msgs), default=None)
-    if watermark is None:
+def run_auto_continue(web_view, dry_run, continue_history, index):
+    content_element = find_chat_content_element(web_view)
+    if not content_element:
+        log.info("Could not find chat content element")
         return
-    log.info("Max length y-pos watermark is %s", watermark)
 
-    # Find messages with font-claude-message class
-    claude_messages = web_view.findall(
-        lambda e: "font-claude-message" in e.dom_class_list
-    )
+    messages = content_element.children
+    should_continue = False
+    for i, message in enumerate(messages):
+        match message:
+            case HAX(dom_class_list={"group/thumbnail": True}):
+                continue
 
-    # Check if there are any Claude messages after our max length message
-    if (messages_after := sum(1 for e in claude_messages if e.ypos > watermark)) != 0:
-        log.info(
-            "But there were %s Claude messages after, so not at end of chat",
-            messages_after,
-        )
+            case HAX(dom_class_list={"p-1": True}):
+                break
+
+            case HAX(
+                dom_class_list={"group": True},
+                children_by_class={"font-claude-message": [inner]},
+            ):
+                match message.children[-1]:
+                    case HAX(
+                        children=[
+                            HAX(
+                                role="AXStaticText",
+                                value="Claude hit the max length for a message and has paused its response. You can write Continue to keep the chat going.",
+                            )
+                        ]
+                    ):
+                        log.info(
+                            "assistant: hit the max length (%s, %s)",
+                            i,
+                            continue_history[index],
+                        )
+                        if i > continue_history[index]:
+                            should_continue = True
+                            continue_history[index] = i
+                        else:
+                            log.info(
+                                "...but we already attempted to continue this index, bail"
+                            )
+                            should_continue = False
+                    case _:
+                        log.info("assistant: message")
+                        should_continue = False
+
+            case (
+                HAX(
+                    dom_class_list={"group": True},
+                    children=[HAX(role="AXStaticText"), *inners],
+                )
+                | HAX(
+                    children=[
+                        HAX(
+                            dom_class_list={"group": True},
+                            children=[HAX(role="AXStaticText"), *inners],
+                        )
+                    ]
+                )
+            ):
+                log.info("user: message")
+                should_continue = False
+
+            case _:
+                log.warning("unrecognized message %s", message.repr(2))
+
+    if not should_continue:
+        log.info("Trailing continue not found, all done")
         return
     log.info("Found 'hit the max length' at end of chat")
     textareas = web_view.findall(
         lambda e: e.role == "AXTextArea" and "ProseMirror" in e.dom_class_list
     )
     if len(textareas) != 1:
-        log.warning("Can't find textarea: %s", "\n".join(
-            [e.repr() for e in web_view.findall(lambda e: e.role == "AXTextArea")]
-        ))
+        log.warning(
+            "Can't find textarea: %s",
+            "\n".join(
+                [e.repr() for e in web_view.findall(lambda e: e.role == "AXTextArea")]
+            ),
+        )
         return
     (textarea,) = textareas
     if (contents := textarea.value) not in (
@@ -290,10 +339,12 @@ def run_auto_continue(web_view, dry_run):
         lambda e: e.role == "AXButton" and e.description == "Send Message",
     )
     if not send_buttons:
+        # TODO: shift window into focus and try again
         log.warning("No send button found, skipping auto-continue")
         return
     send_button = send_buttons[0]
     send_button.press()
+    log.info("Auto-continue triggered!")
 
 
 # Notify on complete
@@ -371,16 +422,23 @@ def is_claude_chat_url(web_view):
 def find_chat_content_element(web_view):
     """Find the chat content element in the web view."""
     match web_view:
-        case HAX(
-            children=[
-                HAX(
-                    children_by_class={
-                        "relative": [
-                            HAX(children_by_class={"relative": [target_group]})
-                        ]
-                    }
-                )
-            ]
+        case (
+            HAX(
+                children=[
+                    HAX(
+                        children_by_class={
+                            "relative": [
+                                HAX(children_by_class={"relative": [target_group]})
+                            ]
+                        }
+                    )
+                ]
+            )
+            | HAX(
+                children_by_class={
+                    "relative": [HAX(children_by_class={"relative": [target_group]})]
+                }
+            )
         ):
             log.info("Found target content group: %s", target_group.repr(0))
         case _:
@@ -584,6 +642,7 @@ def cli(
     log.info("Apps: %s", claude_apps)
     windows = [window for app in claude_apps for window in app.windows]
     running = [False] * len(windows)
+    continue_history = [-1] * len(windows)
     log.info("Windows: %s", windows)
 
     while True:
@@ -605,7 +664,7 @@ def cli(
             if auto_approve:
                 run_auto_approve(web_view, dry_run)
             if auto_continue:
-                run_auto_continue(web_view, dry_run)
+                run_auto_continue(web_view, dry_run, continue_history, i)
             if notify_on_complete:
                 run_notify_on_complete(web_view, running, i)
             if snapshot_history:
