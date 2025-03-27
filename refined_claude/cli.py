@@ -8,12 +8,19 @@ import logging
 import subprocess
 import json
 import re
+from typing import NamedTuple
 from collections import defaultdict
 from .logging import init_logging
 
 
 not_set = object()
 log = logging.getLogger(__name__)
+
+
+class ContinueHistory(NamedTuple):
+    url: str
+    watermark: int
+
 
 # Debugging utils
 
@@ -277,9 +284,16 @@ def run_auto_continue(web_view, dry_run, continue_history, index):
                             i,
                             continue_history[index],
                         )
-                        if i > continue_history[index]:
+                        chat_url = get_chat_url(web_view)
+                        if (
+                            continue_history[index] is None
+                            or continue_history[index].url != chat_url
+                            or i > continue_history[index].watermark
+                        ):
                             should_continue = True
-                            continue_history[index] = i
+                            continue_history[index] = ContinueHistory(
+                                url=chat_url, watermark=i
+                            )
                         else:
                             log.info(
                                 "...but we already attempted to continue this index, bail"
@@ -408,15 +422,18 @@ def extract_web_view(window):
     return web_area
 
 
-def is_claude_chat_url(web_view):
+def get_chat_url(web_view):
     """Check if the web view URL is a Claude chat URL."""
     url_str = web_view.url
     if url_str is not None:
         log.info("Found WebArea URL: %s", url_str)
-        return re.match(r"https://claude\.ai/chat/[0-9a-f-]+", url_str) is not None
+        if re.match(r"https://claude\.ai/chat/[0-9a-f-]+", url_str) is not None:
+            return url_str
+        else:
+            return None
     else:
         log.info("No AXURL attribute found in WebArea")
-        return False
+        return None
 
 
 def find_chat_content_element(web_view):
@@ -642,7 +659,7 @@ def cli(
     log.info("Apps: %s", claude_apps)
     windows = [window for app in claude_apps for window in app.windows]
     running = [False] * len(windows)
-    continue_history = [-1] * len(windows)
+    continue_history = [None] * len(windows)
     log.info("Windows: %s", windows)
 
     while True:
@@ -656,7 +673,7 @@ def cli(
                 continue
 
             # Check if the URL is a Claude chat URL
-            if not is_claude_chat_url(web_view):
+            if get_chat_url(web_view) is None:
                 log.info("Not a Claude chat URL, skipping")
                 continue
 
