@@ -322,6 +322,7 @@ def run_auto_continue(web_view, dry_run, continue_history, index):
 
             case _:
                 log.warning("unrecognized message %s", message.repr(2))
+                pass
 
     if not should_continue:
         log.info("Trailing continue not found, all done")
@@ -441,6 +442,27 @@ def find_chat_content_element(web_view):
     match web_view:
         case (
             HAX(
+                children=[
+                    HAX(
+                        children_by_class={
+                            "relative": [
+                                HAX(
+                                    children_by_class={
+                                        "relative": [
+                                            HAX(
+                                                children_by_class={
+                                                    "relative": [target_group]
+                                                }
+                                            )
+                                        ]
+                                    }
+                                )
+                            ]
+                        }
+                    )
+                ]
+            )
+            | HAX(
                 children=[
                     HAX(
                         children_by_class={
@@ -589,9 +611,21 @@ def run_snapshot_history(web_view, output_file=None):
     help="Automatically approve tool usage requests (in default set)",
 )
 @click.option(
+    "--only-auto-approve",
+    is_flag=True,
+    default=False,
+    help="Only enable auto-approve and disable all other default features",
+)
+@click.option(
     "--auto-continue/--no-auto-continue",
     default=None,
     help="Automatically continue chats when they hit the reply size limit (in default set)",
+)
+@click.option(
+    "--only-auto-continue",
+    is_flag=True,
+    default=False,
+    help="Only enable auto-continue and disable all other default features",
 )
 @click.option(
     "--notify-on-complete/--no-notify-on-complete",
@@ -599,10 +633,22 @@ def run_snapshot_history(web_view, output_file=None):
     help="Send a notification when Claude finishes responding (in default set)",
 )
 @click.option(
+    "--only-notify-on-complete",
+    is_flag=True,
+    default=False,
+    help="Only enable notify-on-complete and disable all other default features",
+)
+@click.option(
     "--snapshot-history",
     type=click.Path(),
     default=None,
     help="Capture chat content and save to specified file",
+)
+@click.option(
+    "--only-snapshot-history",
+    type=click.Path(),
+    default=None,
+    help="Only enable snapshot-history to specified file and disable all other default features",
 )
 @click.option(
     "--dry-run/--no-dry-run",
@@ -621,33 +667,69 @@ def run_snapshot_history(web_view, output_file=None):
 )
 def cli(
     auto_approve: bool | None,
+    only_auto_approve: bool,
     auto_continue: bool | None,
+    only_auto_continue: bool,
     notify_on_complete: bool | None,
+    only_notify_on_complete: bool,
     snapshot_history: str | None,
+    only_snapshot_history: str | None,
     dry_run: bool,
     once: bool,
     default_features: bool,
 ):
     init_logging()
 
-    # Set default values for flags that are None
-    if default_features:
-        # Default values for each flag if not explicitly set
-        if auto_approve is None:
+    # If --only-snapshot-history is provided, use that path for snapshot_history
+    if only_snapshot_history is not None:
+        snapshot_history = only_snapshot_history
+
+    # Determine if any "only" flags are used
+    any_only_flag = only_auto_approve or only_auto_continue or only_notify_on_complete or (only_snapshot_history is not None)
+
+    # If any "only" flag is used, it overrides default_features
+    if any_only_flag:
+        default_features = False
+
+    # First, determine the default state for unspecified flags
+    default_state = True if default_features else False
+
+    # Apply defaults for unspecified boolean flags
+    if auto_approve is None:
+        auto_approve = default_state
+    if auto_continue is None:
+        auto_continue = default_state
+    if notify_on_complete is None:
+        notify_on_complete = default_state
+
+    # Handle the "only" flags, which override everything else when specified
+    if any_only_flag:
+        # Reset all features to False first
+        auto_approve = False
+        auto_continue = False
+        notify_on_complete = False
+
+        # Then enable only the specific feature(s) requested
+        if only_auto_approve:
             auto_approve = True
-        if auto_continue is None:
+        if only_auto_continue:
             auto_continue = True
-        if notify_on_complete is None:
+        if only_notify_on_complete:
             notify_on_complete = True
-    else:
-        # When default_features is False, ensure no flags are None
-        # We'll go with a conservative default of False for all features
-        if auto_approve is None:
-            auto_approve = False
-        if auto_continue is None:
-            auto_continue = False
-        if notify_on_complete is None:
-            notify_on_complete = False
+        # Note: snapshot_history doesn't need special handling as it's path-based
+    # Log which features are active
+    active_features = []
+    if auto_approve:
+        active_features.append("auto-approve")
+    if auto_continue:
+        active_features.append("auto-continue")
+    if notify_on_complete:
+        active_features.append("notify-on-complete")
+    if snapshot_history is not None:
+        active_features.append(f"snapshot-history={snapshot_history}")
+
+    log.info("Active features: %s", ", ".join(active_features) if active_features else "none")
+
     # NB: Claude is only queried at process start (maybe add an option to
     # requery every loop iteration
     apps = AppKit.NSWorkspace.sharedWorkspace().runningApplications()
