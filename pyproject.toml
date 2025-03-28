@@ -15,6 +15,7 @@ dependencies = [
     "pyobjc-framework-applicationservices==10.3.2",
     "pyobjc-framework-cocoa==10.3.2",
     "pyobjc-framework-quartz==10.3.2",
+    "rich>=13.9.4",
 ]
 
 [build-system]
