@@ -11,6 +11,7 @@ import re
 from typing import NamedTuple
 from collections import defaultdict
 from .logging import init_logging
+import rich.progress
 
 
 not_set = object()
@@ -744,30 +745,34 @@ def cli(
     continue_history = [None] * len(windows)
     log.info("Windows: %s", windows)
 
-    while True:
-        log.info("Start iteration")
-        for i, window in enumerate(windows):
-            log.info("Window %s", window)
-            # Extract web view first
-            web_view = extract_web_view(window)
-            if web_view is None:
-                log.info("Could not extract web view, skipping")
-                continue
+    with rich.progress.Progress() as progress:
+        tasks = []
+        for w in enumerate(windows):
+            tasks.append(progress.add_task(w, total=None))
+        while True:
+            log.info("Start iteration")
+            for i, window in enumerate(windows):
+                log.info("Window %s", window)
+                # Extract web view first
+                web_view = extract_web_view(window)
+                if web_view is None:
+                    log.info("Could not extract web view, skipping")
+                    continue
 
-            # Check if the URL is a Claude chat URL
-            if get_chat_url(web_view) is None:
-                log.info("Not a Claude chat URL, skipping")
-                continue
+                # Check if the URL is a Claude chat URL
+                if get_chat_url(web_view) is None:
+                    log.info("Not a Claude chat URL, skipping")
+                    continue
 
-            # Only perform operations if we have a valid web view with Claude chat URL
-            if auto_approve:
-                run_auto_approve(web_view, dry_run)
-            if auto_continue:
-                run_auto_continue(web_view, dry_run, continue_history, i)
-            if notify_on_complete:
-                run_notify_on_complete(web_view, running, i)
-            if snapshot_history:
-                run_snapshot_history(web_view, snapshot_history)
-        if once:
-            return
-        time.sleep(1)
+                # Only perform operations if we have a valid web view with Claude chat URL
+                if auto_approve:
+                    run_auto_approve(web_view, dry_run)
+                if auto_continue:
+                    run_auto_continue(web_view, dry_run, continue_history, i)
+                if notify_on_complete:
+                    run_notify_on_complete(web_view, running, i)
+                if snapshot_history:
+                    run_snapshot_history(web_view, snapshot_history)
+            if once:
+                return
+            time.sleep(1)
