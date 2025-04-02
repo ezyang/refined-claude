@@ -11,6 +11,7 @@ import re
 from typing import NamedTuple
 from collections import defaultdict
 from .logging import init_logging
+from .console import console
 import rich.progress
 
 
@@ -745,7 +746,7 @@ def cli(
     continue_history = [None] * len(windows)
     log.info("Windows: %s", windows)
 
-    with rich.progress.Progress() as progress:
+    with rich.progress.Progress(console=console) as progress:
         tasks = []
         for w in enumerate(windows):
             tasks.append(progress.add_task(w, total=None))
