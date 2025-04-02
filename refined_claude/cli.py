@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import click
 import Quartz
 import AppKit
@@ -8,11 +10,15 @@ import logging
 import subprocess
 import json
 import re
-from typing import NamedTuple
+from typing import NamedTuple, List
 from collections import defaultdict
 from .logging import init_logging
 from .console import console
-import rich.progress
+from rich.live import Live
+from rich.text import Text
+from rich.console import Group
+from rich.spinner import Spinner
+from rich.markup import escape
 
 
 not_set = object()
@@ -22,6 +28,59 @@ log = logging.getLogger(__name__)
 class ContinueHistory(NamedTuple):
     url: str
     watermark: int
+
+
+# Class to manage the spinner and URL display for each window
+class SpinnerURLView:
+    def __init__(self, windows: List[HAX]):
+        self.windows = windows
+        # Use a compact single-character spinner
+        self.spinners = [Spinner("line", text="") for _ in windows]
+        self.urls = ["" for _ in windows]
+        self.web_views = [None for _ in windows]
+
+    def update_url(self, index: int, url: str):
+        self.urls[index] = url if url else "Not a Claude chat"
+
+    def update_web_view(self, index: int, web_view):
+        self.web_views[index] = web_view
+
+    def __rich__(self):
+        current_time = time.time()
+        lines = []
+        for i, spinner in enumerate(self.spinners):
+            line = Text()
+            line.append(spinner.render(current_time))
+            line.append(" ")
+
+            # Style URL with appropriate color and underlining
+            url = self.urls[i]
+            if url and url != "Not a Claude chat":
+                # Extract parts of the URL for sophisticated styling
+                if url.startswith("https://claude.ai/chat/"):
+                    # Format the URL to look more like a proper link
+                    chat_id = url.split("/")[-1]
+
+                    # Style protocol and domain
+                    protocol_domain = Text("https://claude.ai", style="blue")
+                    # Style path
+                    path = Text("/chat/", style="blue")
+                    # Style chat ID
+                    id_part = Text(chat_id, style="bold blue underline")
+
+                    # Append each styled part to the line
+                    line.append(protocol_domain)
+                    line.append(path)
+                    line.append(id_part)
+                else:
+                    # For other URLs or unexpected formats, use default URL styling
+                    line.append(Text(url, style="link", no_wrap=True))
+            else:
+                # For non-URLs
+                line.append(Text(url if url else "", style="italic grey74", no_wrap=True))
+
+            lines.append(line)
+        return Group(*lines)
 
 
 # Debugging utils
@@ -746,22 +805,29 @@ def cli(
     continue_history = [None] * len(windows)
     log.info("Windows: %s", windows)
 
-    with rich.progress.Progress(console=console) as progress:
-        tasks = []
-        for w in enumerate(windows):
-            tasks.append(progress.add_task(w, total=None))
+    view = SpinnerURLView(windows)
+
+    # Set auto_refresh=False as we'll manually update with live.update()
+    # Ensure no truncation of text that overflows
+    with Live(view, console=console, refresh_per_second=8, auto_refresh=False) as live:
         while True:
             log.info("Start iteration")
             for i, window in enumerate(windows):
                 log.info("Window %s", window)
                 # Extract web view first
                 web_view = extract_web_view(window)
+                view.update_web_view(i, web_view)
+
                 if web_view is None:
                     log.info("Could not extract web view, skipping")
+                    view.update_url(i, "")
                     continue
 
                 # Check if the URL is a Claude chat URL
-                if get_chat_url(web_view) is None:
+                url = get_chat_url(web_view)
+                view.update_url(i, url)
+
+                if url is None:
                     log.info("Not a Claude chat URL, skipping")
                     continue
 
@@ -774,6 +840,10 @@ def cli(
                     run_notify_on_complete(web_view, running, i)
                 if snapshot_history:
                     run_snapshot_history(web_view, snapshot_history)
+
+            # Refresh the live display with updated URLs
+            live.update(view)
+
             if once:
                 return
             time.sleep(1)
