@@ -1,5 +1,6 @@
 import datetime
 import logging
+from rich.console import Console
 
 
 class GlogFormatter(logging.Formatter):
@@ -31,7 +32,22 @@ class GlogFormatter(logging.Formatter):
         return super().format(record)
 
 
+class RichConsoleHandler(logging.Handler):
+    """Custom logging handler that uses rich.console.Console's out method"""
+
+    def __init__(self):
+        super().__init__()
+        self.console = Console()
+
+    def emit(self, record):
+        try:
+            msg = self.format(record)
+            self.console.out(msg)
+        except Exception:
+            self.handleError(record)
+
+
 def init_logging():
-    handler = logging.StreamHandler()
+    handler = RichConsoleHandler()
     handler.setFormatter(GlogFormatter())
     logging.basicConfig(level=logging.INFO, handlers=[handler])
