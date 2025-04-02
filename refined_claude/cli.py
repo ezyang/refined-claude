@@ -10,6 +10,10 @@ import logging
 import subprocess
 import json
 import re
+import select
+import sys
+import os
+import contextlib
 from typing import NamedTuple, List
 from collections import defaultdict
 from .logging import init_logging
@@ -38,6 +42,8 @@ class SpinnerURLView:
         self.spinners = [Spinner("line", text="") for _ in windows]
         self.urls = ["" for _ in windows]
         self.web_views = [None for _ in windows]
+        self.paused = False
+        self.pause_key = " "  # Default to space bar
 
     def update_url(self, index: int, url: str):
         self.urls[index] = url if url else "Not a Claude chat"
@@ -45,12 +51,40 @@ class SpinnerURLView:
     def update_web_view(self, index: int, web_view):
         self.web_views[index] = web_view
 
+    def set_pause_key(self, key: str):
+        """Set the key used to toggle pause state"""
+        self.pause_key = key
+
+    def toggle_pause(self):
+        """Toggle the paused state"""
+        self.paused = not self.paused
+        return self.paused
+
     def __rich__(self):
         current_time = time.time()
         lines = []
+
+        # Add pause indicator at the top if paused
+        if self.paused:
+            status_line = Text("⏸ PAUSED ⏸", style="bold white on red")
+            status_line.append(" Press ")
+            status_line.append(Text(self.pause_key if self.pause_key != " " else "SPACE", style="bold"))
+            status_line.append(" to resume")
+            lines.append(status_line)
+        else:
+            # Add a subtle hint about the pause key when not paused
+            status_line = Text(f"Press ", style="dim")
+            status_line.append(Text(self.pause_key if self.pause_key != " " else "SPACE", style="bold dim"))
+            status_line.append(Text(" to pause", style="dim"))
+            lines.append(status_line)
+
         for i, spinner in enumerate(self.spinners):
             line = Text()
-            line.append(spinner.render(current_time))
+            # If paused, don't animate the spinner
+            if self.paused:
+                line.append("○")  # Static circle instead of spinner when paused
+            else:
+                line.append(spinner.render(current_time))
             line.append(" ")
 
             # Style URL with appropriate color and underlining
@@ -155,6 +189,67 @@ def ax_attr(element, attribute, default=not_set):
 
 
 # Utilities
+
+
+@contextlib.contextmanager
+def NonBlockingInput():
+    """Context manager for non-blocking terminal input.
+
+    Sets up terminal for non-blocking input and restores original settings on exit.
+    """
+    original_terminal_settings = None
+
+    # Only attempt to set up non-blocking input if stdin is a TTY
+    if sys.stdin.isatty():
+        try:
+            import termios
+            import tty
+            # Save original terminal settings
+            original_terminal_settings = termios.tcgetattr(sys.stdin.fileno())
+            # Set terminal to non-canonical mode (no line buffering)
+            tty.setcbreak(sys.stdin.fileno())
+            # Make stdin non-blocking
+            os.set_blocking(sys.stdin.fileno(), False)
+            log.info("Non-blocking input configured")
+        except (ImportError, AttributeError) as e:
+            log.warning(f"Could not configure terminal for non-blocking input: {e}")
+
+    try:
+        yield
+    finally:
+        # Restore terminal settings when exiting the context
+        if original_terminal_settings:
+            try:
+                import termios
+                termios.tcsetattr(sys.stdin.fileno(), termios.TCSADRAIN, original_terminal_settings)
+                log.info("Terminal settings restored")
+            except Exception as e:
+                log.warning(f"Could not restore terminal settings: {e}")
+
+
+def check_key_pressed(target_key=None):
+    """Check if a key has been pressed without blocking.
+
+    Args:
+        target_key: If specified, only return True when this specific key is pressed
+
+    Returns:
+        Either the pressed key or True if target_key was pressed, False otherwise
+    """
+    if not sys.stdin.isatty():
+        return False
+
+    try:
+        # Non-blocking read
+        if select.select([sys.stdin], [], [], 0.0)[0]:
+            key = sys.stdin.read(1)
+            if target_key is None:
+                return key
+            return key == target_key
+    except Exception as e:
+        log.warning(f"Error reading keyboard input: {e}")
+
+    return False
 
 
 class HAX:
@@ -726,6 +821,11 @@ def run_snapshot_history(web_view, output_file=None):
     default=True,
     help="Use default values for features when not explicitly specified",
 )
+@click.option(
+    "--pause-key",
+    default=" ",
+    help="Key to press to pause/resume the application (default: space)",
+)
 def cli(
     auto_approve: bool | None,
     only_auto_approve: bool,
@@ -738,6 +838,7 @@ def cli(
     dry_run: bool,
     once: bool,
     default_features: bool,
+    pause_key: str,
 ):
     init_logging()
 
@@ -789,6 +890,10 @@ def cli(
     if snapshot_history is not None:
         active_features.append(f"snapshot-history={snapshot_history}")
 
+    # Pause key is always active
+    pause_key_display = "SPACE" if pause_key == " " else pause_key
+    active_features.append(f"pause-key='{pause_key_display}'")
+
     log.info("Active features: %s", ", ".join(active_features) if active_features else "none")
 
     # NB: Claude is only queried at process start (maybe add an option to
@@ -806,11 +911,23 @@ def cli(
     log.info("Windows: %s", windows)
 
     view = SpinnerURLView(windows)
+    view.set_pause_key(pause_key)
 
     # Set auto_refresh=False as we'll manually update with live.update()
     # Ensure no truncation of text that overflows
-    with Live(view, console=console, refresh_per_second=8, auto_refresh=False) as live:
+    with NonBlockingInput(), Live(view, console=console, refresh_per_second=8, auto_refresh=False) as live:
         while True:
+            # Check for keyboard input to toggle pause state
+            if check_key_pressed(pause_key):
+                paused = view.toggle_pause()
+                log.info(f"Pause state toggled: {'paused' if paused else 'resumed'}")
+
+            # Skip processing if paused, but still update the display
+            if view.paused:
+                live.update(view)
+                time.sleep(0.1)
+                continue
+
             log.info("Start iteration")
             for i, window in enumerate(windows):
                 log.info("Window %s", window)
