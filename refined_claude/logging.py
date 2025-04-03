@@ -50,7 +50,7 @@ class RichConsoleHandler(logging.Handler):
         if RichConsoleHandler._logging_in_progress:
             # Write directly to stderr as a last resort
             fallback_msg = f"RECURSIVE LOG PREVENTED: {record.name}: {record.getMessage()}\n"
-            sys.stderr.write(fallback_msg)
+            self._safe_stderr_write(fallback_msg)
             return
 
         # Set the flag to prevent recursion
@@ -61,11 +61,20 @@ class RichConsoleHandler(logging.Handler):
             console.out(msg)
         except Exception as e:
             # If logging fails, use standard stderr as fallback
-            sys.stderr.write(f"LOGGING ERROR: {str(e)}\n")
-            sys.stderr.write(f"Original message: {record.getMessage()}\n")
+            self._safe_stderr_write(f"LOGGING ERROR: {str(e)}\n")
+            self._safe_stderr_write(f"Original message: {record.getMessage()}\n")
         finally:
             # Always reset the flag when done
             RichConsoleHandler._logging_in_progress = False
+
+    def _safe_stderr_write(self, message):
+        """Write to stderr, handling BlockingIOError if stderr is non-blocking."""
+        try:
+            sys.stderr.write(message)
+        except BlockingIOError:
+            # If stderr is non-blocking and would block, handle it gracefully
+            # We can't log the message now, but at least we won't crash
+            pass
 
 
 def init_logging():

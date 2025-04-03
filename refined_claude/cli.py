@@ -198,6 +198,7 @@ def NonBlockingInput():
     Sets up terminal for non-blocking input and restores original settings on exit.
     """
     original_terminal_settings = None
+    original_stderr_blocking = None
 
     # Only attempt to set up non-blocking input if stdin is a TTY
     if sys.stdin.isatty():
@@ -210,6 +211,19 @@ def NonBlockingInput():
             tty.setcbreak(sys.stdin.fileno())
             # Make stdin non-blocking
             os.set_blocking(sys.stdin.fileno(), False)
+
+            # Save the current blocking state of stderr and ensure it stays blocking
+            # This prevents BlockingIOError when writing to stderr in error handlers
+            if hasattr(sys.stderr, 'fileno'):
+                try:
+                    original_stderr_blocking = os.get_blocking(sys.stderr.fileno())
+                    if not original_stderr_blocking:
+                        os.set_blocking(sys.stderr.fileno(), True)
+                except (OSError, ValueError):
+                    # If we can't get or set the blocking mode (e.g. not a real file),
+                    # just continue with default behavior
+                    pass
+
             log.info("Non-blocking input configured")
         except (ImportError, AttributeError) as e:
             log.warning(f"Could not configure terminal for non-blocking input: {e}")
@@ -225,6 +239,13 @@ def NonBlockingInput():
                 log.info("Terminal settings restored")
             except Exception as e:
                 log.warning(f"Could not restore terminal settings: {e}")
+
+        # Restore original stderr blocking state if we changed it
+        if original_stderr_blocking is not None:
+            try:
+                os.set_blocking(sys.stderr.fileno(), original_stderr_blocking)
+            except (OSError, ValueError):
+                pass
 
 
 def check_key_pressed(target_key=None):
@@ -246,6 +267,9 @@ def check_key_pressed(target_key=None):
             if target_key is None:
                 return key
             return key == target_key
+    except BlockingIOError:
+        # Handle case where stdin is non-blocking but would block
+        pass
     except Exception as e:
         log.warning(f"Error reading keyboard input: {e}")
 
