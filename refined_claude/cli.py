@@ -913,9 +913,8 @@ def cli(
     view = SpinnerURLView(windows)
     view.set_pause_key(pause_key)
 
-    # Set auto_refresh=False as we'll manually update with live.update()
     # Ensure no truncation of text that overflows
-    with NonBlockingInput(), Live(view, console=console, refresh_per_second=8, auto_refresh=False) as live:
+    with NonBlockingInput(), Live(view, console=console, refresh_per_second=8, auto_refresh=True) as live:
         while True:
             # Check for keyboard input to toggle pause state
             if check_key_pressed(pause_key):
