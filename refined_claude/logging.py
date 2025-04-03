@@ -1,5 +1,6 @@
 import datetime
 import logging
+import sys
 from .console import console
 
 
@@ -33,20 +34,58 @@ class GlogFormatter(logging.Formatter):
 
 
 class RichConsoleHandler(logging.Handler):
-    """Custom logging handler that uses rich.console.Console's out method"""
+    """Custom logging handler that uses rich.console.Console's out method
+    with protection against recursive exception handling.
+    """
+
+    # Keep track of active logging to prevent recursion
+    _logging_in_progress = False
 
     def __init__(self):
         super().__init__()
 
     def emit(self, record):
+        # Simple anti-recursion mechanism - if we're already in the middle of logging,
+        # don't try to log again, which could cause an infinite loop
+        if RichConsoleHandler._logging_in_progress:
+            # Write directly to stderr as a last resort
+            fallback_msg = f"RECURSIVE LOG PREVENTED: {record.name}: {record.getMessage()}\n"
+            sys.stderr.write(fallback_msg)
+            return
+
+        # Set the flag to prevent recursion
+        RichConsoleHandler._logging_in_progress = True
+
         try:
             msg = self.format(record)
             console.out(msg)
-        except Exception:
-            self.handleError(record)
+        except Exception as e:
+            # If logging fails, use standard stderr as fallback
+            sys.stderr.write(f"LOGGING ERROR: {str(e)}\n")
+            sys.stderr.write(f"Original message: {record.getMessage()}\n")
+        finally:
+            # Always reset the flag when done
+            RichConsoleHandler._logging_in_progress = False
 
 
 def init_logging():
+    """Initialize logging with safeguards against cascading errors."""
+
+    # Create our handler with anti-recursion protection
     handler = RichConsoleHandler()
     handler.setFormatter(GlogFormatter())
-    logging.basicConfig(level=logging.INFO, handlers=[handler])
+
+    # Configure basic logging with our handler
+    logging.basicConfig(level=logging.INFO, handlers=[handler], force=True)
+
+    # Make sure the standard error handler is replaced with our handler
+    root_logger = logging.getLogger()
+    for hdlr in root_logger.handlers[:]:
+        if not isinstance(hdlr, RichConsoleHandler):
+            root_logger.removeHandler(hdlr)
+
+    # Ensure our handler is attached
+    if not root_logger.handlers:
+        root_logger.addHandler(handler)
+
+    root_logger.setLevel(logging.INFO)
