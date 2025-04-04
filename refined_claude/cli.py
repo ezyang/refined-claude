@@ -43,17 +43,14 @@ class SpinnerURLView:
         self.urls = ["" for _ in windows]
         self.web_views = [None for _ in windows]
         self.paused = False
-        self.pause_key = " "  # Default to space bar
+        # With the new implementation, we always use Enter key
+        self.pause_key = "ENTER"
 
     def update_url(self, index: int, url: str):
         self.urls[index] = url if url else "Not a Claude chat"
 
     def update_web_view(self, index: int, web_view):
         self.web_views[index] = web_view
-
-    def set_pause_key(self, key: str):
-        """Set the key used to toggle pause state"""
-        self.pause_key = key
 
     def toggle_pause(self):
         """Toggle the paused state"""
@@ -68,13 +65,13 @@ class SpinnerURLView:
         if self.paused:
             status_line = Text("⏸ PAUSED ⏸", style="bold white on red")
             status_line.append(" Press ")
-            status_line.append(Text(self.pause_key if self.pause_key != " " else "SPACE", style="bold"))
+            status_line.append(Text("ENTER", style="bold"))
             status_line.append(" to resume")
             lines.append(status_line)
         else:
             # Add a subtle hint about the pause key when not paused
-            status_line = Text(f"Press ", style="dim")
-            status_line.append(Text(self.pause_key if self.pause_key != " " else "SPACE", style="bold dim"))
+            status_line = Text("Press ", style="dim")
+            status_line.append(Text("ENTER", style="bold dim"))
             status_line.append(Text(" to pause", style="dim"))
             lines.append(status_line)
 
@@ -192,84 +189,36 @@ def ax_attr(element, attribute, default=not_set):
 
 
 @contextlib.contextmanager
-def NonBlockingInput():
-    """Context manager for non-blocking terminal input.
+def SimpleInputContext():
+    """Simple context manager for console input.
 
-    Sets up terminal for non-blocking input and restores original settings on exit.
+    This uses blocking input with ENTER key rather than non-blocking input
+    to avoid the BlockingIOError issues.
     """
-    original_terminal_settings = None
-    original_stderr_blocking = None
-
-    # Only attempt to set up non-blocking input if stdin is a TTY
-    if sys.stdin.isatty():
-        try:
-            import termios
-            import tty
-            # Save original terminal settings
-            original_terminal_settings = termios.tcgetattr(sys.stdin.fileno())
-            # Set terminal to non-canonical mode (no line buffering)
-            tty.setcbreak(sys.stdin.fileno())
-            # Make stdin non-blocking
-            os.set_blocking(sys.stdin.fileno(), False)
-
-            # Save the current blocking state of stderr and ensure it stays blocking
-            # This prevents BlockingIOError when writing to stderr in error handlers
-            if hasattr(sys.stderr, 'fileno'):
-                try:
-                    original_stderr_blocking = os.get_blocking(sys.stderr.fileno())
-                    if not original_stderr_blocking:
-                        os.set_blocking(sys.stderr.fileno(), True)
-                except (OSError, ValueError):
-                    # If we can't get or set the blocking mode (e.g. not a real file),
-                    # just continue with default behavior
-                    pass
-
-            log.info("Non-blocking input configured")
-        except (ImportError, AttributeError) as e:
-            log.warning(f"Could not configure terminal for non-blocking input: {e}")
-
     try:
+        log.info("Input context configured")
         yield
     finally:
-        # Restore terminal settings when exiting the context
-        if original_terminal_settings:
-            try:
-                import termios
-                termios.tcsetattr(sys.stdin.fileno(), termios.TCSADRAIN, original_terminal_settings)
-                log.info("Terminal settings restored")
-            except Exception as e:
-                log.warning(f"Could not restore terminal settings: {e}")
-
-        # Restore original stderr blocking state if we changed it
-        if original_stderr_blocking is not None:
-            try:
-                os.set_blocking(sys.stderr.fileno(), original_stderr_blocking)
-            except (OSError, ValueError):
-                pass
+        log.info("Input context closed")
 
 
-def check_key_pressed(target_key=None):
-    """Check if a key has been pressed without blocking.
+def check_for_enter_key():
+    """Check if the Enter key has been pressed.
 
-    Args:
-        target_key: If specified, only return True when this specific key is pressed
+    This is a simplified version that uses blocking input and only looks for Enter key.
 
     Returns:
-        Either the pressed key or True if target_key was pressed, False otherwise
+        True if Enter was pressed, False otherwise
     """
     if not sys.stdin.isatty():
         return False
 
     try:
-        # Non-blocking read
-        if select.select([sys.stdin], [], [], 0.0)[0]:
-            key = sys.stdin.read(1)
-            if target_key is None:
-                return key
-            return key == target_key
-    except BlockingIOError:
-        # Handle case where stdin is non-blocking but would block
-        pass
+        # Check if there's data to read with a short timeout
+        if select.select([sys.stdin], [], [], 0.1)[0]:
+            # Read a line (until Enter is pressed)
+            line = sys.stdin.readline().strip()
+            return True  # Any input followed by Enter will toggle pause
     except Exception as e:
         log.warning(f"Error reading keyboard input: {e}")
 
@@ -845,11 +794,6 @@ def run_snapshot_history(web_view, output_file=None):
     default=True,
     help="Use default values for features when not explicitly specified",
 )
-@click.option(
-    "--pause-key",
-    default=" ",
-    help="Key to press to pause/resume the application (default: space)",
-)
 def cli(
     auto_approve: bool | None,
     only_auto_approve: bool,
@@ -862,7 +806,6 @@ def cli(
     dry_run: bool,
     once: bool,
     default_features: bool,
-    pause_key: str,
 ):
     init_logging()
 
@@ -914,9 +857,8 @@ def cli(
     if snapshot_history is not None:
         active_features.append(f"snapshot-history={snapshot_history}")
 
-    # Pause key is always active
-    pause_key_display = "SPACE" if pause_key == " " else pause_key
-    active_features.append(f"pause-key='{pause_key_display}'")
+    # Pause with Enter key is always active
+    active_features.append("pause-key='ENTER'")
 
     log.info("Active features: %s", ", ".join(active_features) if active_features else "none")
 
@@ -935,13 +877,12 @@ def cli(
     log.info("Windows: %s", windows)
 
     view = SpinnerURLView(windows)
-    view.set_pause_key(pause_key)
 
     # Ensure no truncation of text that overflows
-    with NonBlockingInput(), Live(view, console=console, refresh_per_second=8, auto_refresh=False) as live:
+    with SimpleInputContext(), Live(view, console=console, refresh_per_second=8, auto_refresh=True) as live:
         while True:
             # Check for keyboard input to toggle pause state
-            if check_key_pressed(pause_key):
+            if check_for_enter_key():
                 paused = view.toggle_pause()
                 log.info(f"Pause state toggled: {'paused' if paused else 'resumed'}")
 
