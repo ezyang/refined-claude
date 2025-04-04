@@ -938,7 +938,7 @@ def cli(
     view.set_pause_key(pause_key)
 
     # Ensure no truncation of text that overflows
-    with NonBlockingInput(), Live(view, console=console, refresh_per_second=8, auto_refresh=True) as live:
+    with NonBlockingInput(), Live(view, console=console, refresh_per_second=8, auto_refresh=False) as live:
         while True:
             # Check for keyboard input to toggle pause state
             if check_key_pressed(pause_key):
