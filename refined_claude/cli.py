@@ -346,13 +346,13 @@ class HAX:
 
 def run_auto_approve(web_view, dry_run):
     buttons = web_view.findall(
-        lambda e: e.role == "AXButton" and e.title == "Allow for This Chat"
+        lambda e: e.role == "AXButton" and e.title == "Allow for this chat"
     )
     assert len(buttons) <= 1
     if not buttons:
         return
     button = buttons[0]
-    log.info("Found 'Allow for This Chat' button: %s", button)
+    log.info("Found 'Allow for this chat' button: %s", button)
     # TODO: allow verifying which tool is requested
     if dry_run:
         log.info("Stopping now because of --dry-run")
