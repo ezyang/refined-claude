@@ -364,12 +364,8 @@ def run_auto_approve(web_view, dry_run):
 # Auto continue
 
 
-def run_auto_continue(web_view, dry_run, continue_history, index):
-    content_element = find_chat_content_element(web_view)
-    if not content_element:
-        # TODO: hoist this
-        log.debug("Could not find chat content element")
-        return
+def run_auto_continue(web_view, dry_run, continue_history, index, content_element):
+    """Auto-continue Claude chats when they hit the reply size limit."""
 
     messages = content_element.children
     should_continue = False
@@ -556,7 +552,11 @@ def get_chat_url(web_view):
 
 
 def find_chat_content_element(web_view):
-    """Find the chat content element in the web view."""
+    """Find the chat content element in the web view.
+
+    Note: This function is called once in the main loop and its result is passed to multiple
+    functions that need it, to avoid redundantly finding the same element multiple times.
+    """
     match web_view:
         case (
             HAX(
@@ -701,12 +701,8 @@ def parse_messages(parent):
     return "\n\n----\n\n".join(ret)
 
 
-def run_snapshot_history(web_view, output_file=None):
+def run_snapshot_history(content_element, output_file=None):
     """Capture text content from the chat and optionally save to a file."""
-    content_element = find_chat_content_element(web_view)
-    if not content_element:
-        log.warning("Could not find chat content element")
-        return
 
     log.debug("Taking snapshot of chat content")
     text_content = parse_messages(content_element)
@@ -904,14 +900,25 @@ def cli(
                     continue
 
                 # Only perform operations if we have a valid web view with Claude chat URL
+                # Find the chat content element once if needed
+                content_element = None
+                if auto_continue or snapshot_history:
+                    content_element = find_chat_content_element(web_view)
+                    if not content_element:
+                        log.debug("Could not find chat content element")
+
+                # Run features that don't require content_element
                 if auto_approve:
                     run_auto_approve(web_view, dry_run)
-                if auto_continue:
-                    run_auto_continue(web_view, dry_run, continue_history, i)
                 if notify_on_complete:
                     run_notify_on_complete(web_view, running, i)
-                if snapshot_history:
-                    run_snapshot_history(web_view, snapshot_history)
+
+                # Run features that require content_element only if we found it
+                if content_element:
+                    if auto_continue:
+                        run_auto_continue(web_view, dry_run, continue_history, i, content_element)
+                    if snapshot_history:
+                        run_snapshot_history(content_element, snapshot_history)
 
             # Refresh the live display with updated URLs
             live.update(view)
