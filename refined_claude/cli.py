@@ -352,7 +352,7 @@ def run_auto_approve(web_view, dry_run):
     if not buttons:
         return
     button = buttons[0]
-    log.info("Found 'Allow for this chat' button: %s", button)
+    log.info("Found 'Allow for this chat' button")
     # TODO: allow verifying which tool is requested
     if dry_run:
         log.info("Stopping now because of --dry-run")
@@ -599,7 +599,9 @@ def find_chat_content_element(web_view):
         ):
             log.debug("Found target content group: %s", target_group.repr(0))
         case _:
-            log.warning("Couldn't find content group: %s", web_view.repr(3))
+            # TODO: This flashes when the Allow tool dialog shows up, maybe
+            # make this an error when it's not that case
+            log.debug("Couldn't find content group: %s", web_view.repr(3))
             return None
 
     return target_group
