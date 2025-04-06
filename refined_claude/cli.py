@@ -13,7 +13,6 @@ import re
 import select
 import sys
 import os
-import contextlib
 from typing import NamedTuple, List
 from collections import defaultdict
 from .logging import init_logging
@@ -186,20 +185,6 @@ def ax_attr(element, attribute, default=not_set):
 
 
 # Utilities
-
-
-@contextlib.contextmanager
-def SimpleInputContext():
-    """Simple context manager for console input.
-
-    This uses blocking input with ENTER key rather than non-blocking input
-    to avoid the BlockingIOError issues.
-    """
-    try:
-        log.info("Input context configured")
-        yield
-    finally:
-        log.info("Input context closed")
 
 
 def check_for_enter_key():
@@ -878,8 +863,8 @@ def cli(
 
     view = SpinnerURLView(windows)
 
-    # Ensure no truncation of text that overflows
-    with SimpleInputContext(), Live(view, console=console, refresh_per_second=8, auto_refresh=True) as live:
+    # Start the live display
+    with Live(view, console=console, refresh_per_second=8, auto_refresh=True) as live:
         while True:
             # Check for keyboard input to toggle pause state
             if check_for_enter_key():
