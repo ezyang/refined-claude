@@ -33,6 +33,30 @@ class GlogFormatter(logging.Formatter):
         return super().format(record)
 
 
+class OnceOnlyWarningFilter(logging.Filter):
+    """Filter that prevents the same warning from being emitted more than once
+    from the same file and line number, regardless of message content.
+    """
+    # Set to track warnings that have already been seen by file:line
+    _seen_warnings = set()
+
+    def filter(self, record):
+        # Only apply filtering to warning level logs
+        if record.levelno == logging.WARNING:
+            # Create a unique identifier for this warning location
+            location = f"{record.pathname}:{record.lineno}"
+
+            # If we've seen this warning before, filter it out
+            if location in self._seen_warnings:
+                return False
+
+            # Mark this warning as seen
+            self._seen_warnings.add(location)
+
+        # Allow all non-warning messages and first-time warnings
+        return True
+
+
 class RichConsoleHandler(logging.Handler):
     """Custom logging handler that uses rich.console.Console's out method
     with protection against recursive exception handling.
@@ -91,3 +115,6 @@ def init_logging():
     # Set the log level on the root logger
     root_logger = logging.getLogger()
     root_logger.setLevel(logging.INFO)
+
+    # Add the once-only warning filter to prevent duplicate warnings
+    root_logger.addFilter(OnceOnlyWarningFilter())

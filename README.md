@@ -11,6 +11,7 @@ Accessibility refinements to Claude Desktop.  OS X only.
 - **Auto approve.** Automatically approve tool usage requests.  WARNING: MCP servers can take arbitrary actions, make sure you understand what actions your LLM may take in a chat and try to only install MCP servers which provide only safe/rollback-able operations.
 - **Auto continue.** Automatically continue chats when they hit the reply
   size limit.
+- **Once-only warnings.** Warning messages are only shown once per file location to reduce log noise.
 
 ## Installation
 
