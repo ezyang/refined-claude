@@ -85,16 +85,9 @@ def init_logging():
     handler.setFormatter(GlogFormatter())
 
     # Configure basic logging with our handler
+    # The force=True parameter ensures our configuration overrides any existing handlers
     logging.basicConfig(level=logging.INFO, handlers=[handler], force=True)
 
-    # Make sure the standard error handler is replaced with our handler
+    # Set the log level on the root logger
     root_logger = logging.getLogger()
-    for hdlr in root_logger.handlers[:]:
-        if not isinstance(hdlr, RichConsoleHandler):
-            root_logger.removeHandler(hdlr)
-
-    # Ensure our handler is attached
-    if not root_logger.handlers:
-        root_logger.addHandler(handler)
-
     root_logger.setLevel(logging.INFO)
