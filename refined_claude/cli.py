@@ -352,7 +352,7 @@ def run_auto_approve(web_view, dry_run):
     if not buttons:
         return
     button = buttons[0]
-    log.info("Found 'Allow for this Chat' button: %s", button)
+    log.info("Found 'Allow for This Chat' button: %s", button)
     # TODO: allow verifying which tool is requested
     if dry_run:
         log.info("Stopping now because of --dry-run")
@@ -367,7 +367,8 @@ def run_auto_approve(web_view, dry_run):
 def run_auto_continue(web_view, dry_run, continue_history, index):
     content_element = find_chat_content_element(web_view)
     if not content_element:
-        log.info("Could not find chat content element")
+        # TODO: hoist this
+        log.debug("Could not find chat content element")
         return
 
     messages = content_element.children
@@ -375,6 +376,9 @@ def run_auto_continue(web_view, dry_run, continue_history, index):
     for i, message in enumerate(messages):
         match message:
             case HAX(dom_class_list={"group/thumbnail": True}):
+                continue
+
+            case HAX(dom_class_list={"cursor-pointer": True}):
                 continue
 
             case HAX(dom_class_list={"p-1": True}):
@@ -393,7 +397,7 @@ def run_auto_continue(web_view, dry_run, continue_history, index):
                             )
                         ]
                     ):
-                        log.info(
+                        log.debug(
                             "assistant: hit the max length (%s, %s)",
                             i,
                             continue_history[index],
@@ -409,12 +413,12 @@ def run_auto_continue(web_view, dry_run, continue_history, index):
                                 url=chat_url, watermark=i
                             )
                         else:
-                            log.info(
+                            log.debug(
                                 "...but we already attempted to continue this index, bail"
                             )
                             should_continue = False
                     case _:
-                        log.info("assistant: message")
+                        log.debug("assistant: message")
                         should_continue = False
 
             case (
@@ -431,7 +435,7 @@ def run_auto_continue(web_view, dry_run, continue_history, index):
                     ]
                 )
             ):
-                log.info("user: message")
+                log.debug("user: message")
                 should_continue = False
 
             case _:
@@ -439,7 +443,7 @@ def run_auto_continue(web_view, dry_run, continue_history, index):
                 pass
 
     if not should_continue:
-        log.info("Trailing continue not found, all done")
+        log.debug("Trailing continue not found, all done")
         return
     log.info("Found 'hit the max length' at end of chat")
     textareas = web_view.findall(
@@ -529,9 +533,9 @@ def extract_web_view(window):
                 ]
             }
         ):
-            log.info("Found WebArea: %s", web_area.repr(0))
+            log.debug("Found WebArea: %s", web_area.repr(0))
         case _:
-            log.error("Couldn't find WebArea: %s", window.repr(5))
+            log.debug("Couldn't find WebArea: %s", window.repr(5))
             return None
 
     return web_area
@@ -541,13 +545,13 @@ def get_chat_url(web_view):
     """Check if the web view URL is a Claude chat URL."""
     url_str = web_view.url
     if url_str is not None:
-        log.info("Found WebArea URL: %s", url_str)
+        log.debug("Found WebArea URL: %s", url_str)
         if re.match(r"https://claude\.ai/chat/[0-9a-f-]+", url_str) is not None:
             return url_str
         else:
             return None
     else:
-        log.info("No AXURL attribute found in WebArea")
+        log.warning("No AXURL attribute found in WebArea")
         return None
 
 
@@ -593,9 +597,9 @@ def find_chat_content_element(web_view):
                 }
             )
         ):
-            log.info("Found target content group: %s", target_group.repr(0))
+            log.debug("Found target content group: %s", target_group.repr(0))
         case _:
-            log.error("Couldn't find content group: %s", web_view.repr(3))
+            log.warning("Couldn't find content group: %s", web_view.repr(3))
             return None
 
     return target_group
@@ -627,7 +631,7 @@ def parse_para(para):
         # TODO: this is the only place you can find out what tool was called
         ret.append(para.inner_text())
     else:
-        log.info("unrecognized %s, %s", role, para.repr())
+        log.warning("unrecognized %s, %s", role, para.repr())
         ret.append(para.inner_text())
     return ret
 
@@ -646,11 +650,11 @@ def parse_messages(parent):
         ret_message = []
         match message:
             case HAX(dom_class_list={"group/thumbnail": True}):
-                log.info("skipping thumbnail at %s", i)
+                log.debug("skipping thumbnail at %s", i)
                 continue
 
             case HAX(dom_class_list={"p-1": True}):
-                log.info("skipping %s message trailer", len(messages) - 1)
+                log.debug("skipping %s message trailer", len(messages) - 1)
                 break
 
             case HAX(
@@ -658,7 +662,7 @@ def parse_messages(parent):
                 children_by_class={"font-claude-message": [inner]},
             ):
                 label = "Assistant: "
-                log.info("assistant message %s", message.inner_text()[:40])
+                log.debug("assistant message %s", message.inner_text()[:40])
                 # TODO: distinguish tool calls in here
                 for para in inner.children:
                     if "absolute" in para.dom_class_list:
@@ -680,7 +684,7 @@ def parse_messages(parent):
                 )
             ):
                 label = "User: "
-                log.info("user message %s", message.inner_text()[:40])
+                log.debug("user message %s", message.inner_text()[:40])
                 for para in inners:
                     if "absolute" in para.dom_class_list:
                         break  # message end
@@ -699,10 +703,10 @@ def run_snapshot_history(web_view, output_file=None):
     """Capture text content from the chat and optionally save to a file."""
     content_element = find_chat_content_element(web_view)
     if not content_element:
-        log.info("Could not find chat content element")
+        log.warning("Could not find chat content element")
         return
 
-    log.info("Taking snapshot of chat content")
+    log.debug("Taking snapshot of chat content")
     text_content = parse_messages(content_element)
 
     if text_content:
@@ -877,16 +881,16 @@ def cli(
                 time.sleep(0.1)
                 continue
 
-            log.info("Start iteration")
+            log.debug("Start iteration")
             for i, window in enumerate(windows):
-                log.info("Window %s", window)
+                log.debug("Window %s", window)
                 # Extract web view first
                 web_view = extract_web_view(window)
                 view.update_web_view(i, web_view)
 
                 if web_view is None:
-                    log.info("Could not extract web view, skipping")
-                    view.update_url(i, "")
+                    log.debug("Could not extract web view, skipping")
+                    view.update_url(i, "No web view")
                     continue
 
                 # Check if the URL is a Claude chat URL
@@ -894,7 +898,7 @@ def cli(
                 view.update_url(i, url)
 
                 if url is None:
-                    log.info("Not a Claude chat URL, skipping")
+                    log.debug("Not a Claude chat URL, skipping")
                     continue
 
                 # Only perform operations if we have a valid web view with Claude chat URL
