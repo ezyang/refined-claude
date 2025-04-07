@@ -77,6 +77,17 @@ class SpinnerURLView:
         self.iteration_times[index] = int((current_time - self.last_iteration_timestamps[index]) * 1000)
         self.last_iteration_timestamps[index] = current_time
 
+    def update_segment_times(self, index: int, segment_times: dict):
+        """Update the performance breakdown for the specified window.
+
+        Args:
+            index: Window index
+            segment_times: Dictionary mapping segment codes to times in milliseconds
+        """
+        if not hasattr(self, 'segment_times'):
+            self.segment_times = [{}] * len(self.windows)
+        self.segment_times[index] = segment_times
+
     def toggle_pause(self):
         """Toggle the paused state"""
         self.paused = not self.paused
@@ -148,6 +159,19 @@ class SpinnerURLView:
                 if self.iteration_times[i] > 0:
                     line.append(", ")
                     line.append(Text(format_time(self.iteration_times[i]), style="yellow"))
+
+                    # Add segment times if available
+                    if hasattr(self, 'segment_times') and self.segment_times[i]:
+                        line.append(" (")
+                        # Sort by segment code for consistent display
+                        segments = sorted(self.segment_times[i].items())
+                        segment_texts = []
+                        for code, time_ms in segments:
+                            # Only show if time is > 0ms to avoid clutter
+                            if time_ms > 0:
+                                segment_texts.append(f"{code}:{time_ms}ms")
+                        line.append(Text(", ".join(segment_texts), style="cyan"))
+                        line.append(")")
 
                 line.append("]")
             elif url and url.startswith("https://claude.ai/chat/"):
@@ -232,6 +256,30 @@ def ax_attr(element, attribute, default=not_set):
 
 
 # Utilities
+
+
+class TimingSegment:
+    """Context manager for timing code segments and recording the duration.
+
+    Usage:
+        segment_times = {}
+        with TimingSegment(segment_times, 'U'):
+            # Code to time
+    """
+    def __init__(self, segment_times, segment_code):
+        self.segment_times = segment_times
+        self.segment_code = segment_code
+        self.start_time = None
+
+    def __enter__(self):
+        self.start_time = time.time()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        duration = int((time.time() - self.start_time) * 1000)
+        self.segment_times[self.segment_code] = duration
+        # Don't suppress exceptions
+        return False
 
 
 def check_for_enter_key():
@@ -797,6 +845,15 @@ def format_time(milliseconds):
     return f"{milliseconds}ms"
 
 
+# Segment codes and their meanings:
+# U: URL checking - Time taken to check if the URL is a Claude chat URL
+# M: Message stats - Time taken to calculate and update message statistics
+# A: Auto approve - Time taken to run auto approve feature
+# N: Notify on complete - Time taken to run notify on complete feature
+# C: Auto continue - Time taken to run auto continue feature
+# S: Snapshot history - Time taken to run snapshot history feature
+
+
 def format_messages(parsed_messages):
     """Format the parsed messages into a text representation.
 
@@ -1007,8 +1064,11 @@ def cli(
 
             log.debug("Start iteration")
             for i, window in enumerate(windows):
+                # Dictionary to track segment times with letter codes
+                segment_times = {}
+
                 log.debug("Window %s", window)
-                # Extract web view first
+                # Extract web view first - we don't track this timing as it's cheap
                 web_view = extract_web_view(window)
                 view.update_web_view(i, web_view)
 
@@ -1017,39 +1077,52 @@ def cli(
                     view.update_url(i, "No web view")
                     continue
 
-                # Check if the URL is a Claude chat URL
-                url = get_chat_url(web_view)
-                view.update_url(i, url)
+                # Segment U: URL checking
+                with TimingSegment(segment_times, 'U'):
+                    url = get_chat_url(web_view)
+                    view.update_url(i, url)
 
                 if url is None:
                     log.debug("Not a Claude chat URL, skipping")
                     continue
 
-                # Only perform operations if we have a valid web view with Claude chat URL
-                # Find the chat content element once if needed
-                content_element = None
-                # Always find content element to get message statistics, regardless of features
+                # Find content element - we don't track this timing as it's cheap
                 content_element = find_chat_content_element(web_view)
+
                 if not content_element:
                     log.debug("Could not find chat content element")
                 else:
-                    # Calculate and update message statistics for the status bar
-                    message_count, last_assistant_length = get_message_stats(content_element)
-                    view.update_message_stats(i, message_count, last_assistant_length)
+                    # Segment M: Message stats
+                    with TimingSegment(segment_times, 'M'):
+                        message_count, last_assistant_length = get_message_stats(content_element)
+                        view.update_message_stats(i, message_count, last_assistant_length)
 
-                # Run features that don't require content_element
+                # Run features with detailed timing
+
+                # Segment A: Auto approve
                 if auto_approve:
-                    run_auto_approve(web_view, dry_run)
-                if notify_on_complete:
-                    run_notify_on_complete(web_view, running, i)
+                    with TimingSegment(segment_times, 'A'):
+                        run_auto_approve(web_view, dry_run)
 
-                # Run features that require content_element only if we found it
+                # Segment N: Notify on complete
+                if notify_on_complete:
+                    with TimingSegment(segment_times, 'N'):
+                        run_notify_on_complete(web_view, running, i)
+
+                # Features that require content_element
                 if content_element:
-                    # Parse content element once for all features that need it
+                    # Segment C: Auto continue
                     if auto_continue:
-                        run_auto_continue(web_view, dry_run, continue_history, i, content_element)
+                        with TimingSegment(segment_times, 'C'):
+                            run_auto_continue(web_view, dry_run, continue_history, i, content_element)
+
+                    # Segment S: Snapshot history
                     if snapshot_history:
-                        run_snapshot_history(content_element, snapshot_history)
+                        with TimingSegment(segment_times, 'S'):
+                            run_snapshot_history(content_element, snapshot_history)
+
+                # Update segment times
+                view.update_segment_times(i, segment_times)
 
                 # Calculate active time spent in milliseconds
                 iteration_time_ms = int((time.time() - iteration_start_time) * 1000)
