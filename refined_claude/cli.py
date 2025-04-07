@@ -56,6 +56,9 @@ class SpinnerURLView:
         # Add new fields to track message count and last assistant message length
         self.message_counts = [0 for _ in windows]
         self.last_assistant_lengths = [0 for _ in windows]
+        # Add new fields to track iteration times
+        self.last_iteration_timestamps = [time.time() for _ in windows]
+        self.iteration_times = [0 for _ in windows]
 
     def update_url(self, index: int, url: str):
         self.urls[index] = url if url else "Not a Claude chat"
@@ -66,6 +69,12 @@ class SpinnerURLView:
     def update_message_stats(self, index: int, message_count: int, last_assistant_length: int):
         self.message_counts[index] = message_count
         self.last_assistant_lengths[index] = last_assistant_length
+
+    def update_iteration_time(self, index: int):
+        """Update the iteration time for the specified window."""
+        current_time = time.time()
+        self.iteration_times[index] = int(current_time - self.last_iteration_timestamps[index])
+        self.last_iteration_timestamps[index] = current_time
 
     def toggle_pause(self):
         """Toggle the paused state"""
@@ -125,15 +134,19 @@ class SpinnerURLView:
                 # For non-URLs
                 line.append(Text(url if url else "", style="italic grey74", no_wrap=True))
 
-            # Add message count and last assistant message length if available
+            # Add message count, last assistant message length, and iteration time if available
             if self.message_counts[i] > 0:
-                # Compact format: "12m, C:345c" instead of "12 messages, last assistant: 345 chars"
+                # Compact format: "[12m, 345c, 30s]" instead of "12 messages, last assistant: 345 chars, iteration: 30 seconds"
                 line.append(" [")
                 line.append(Text(f"{self.message_counts[i]}m", style="cyan"))
 
                 if self.last_assistant_lengths[i] > 0:
                     line.append(", ")
                     line.append(Text(f"{self.last_assistant_lengths[i]}c", style="green"))
+
+                if self.iteration_times[i] > 0:
+                    line.append(", ")
+                    line.append(Text(format_time(self.iteration_times[i]), style="yellow"))
 
                 line.append("]")
             elif url and url.startswith("https://claude.ai/chat/"):
@@ -769,6 +782,26 @@ def get_message_stats(content_element):
     return message_count, last_assistant_msg_length
 
 
+def format_time(seconds):
+    """Format seconds into a human-readable string.
+
+    For times less than 60 seconds, returns "Xs".
+    For times 60 seconds or greater, returns "Xm Ys".
+
+    Args:
+        seconds: Time in seconds
+
+    Returns:
+        str: Formatted time string
+    """
+    if seconds < 60:
+        return f"{seconds}s"
+    else:
+        minutes = seconds // 60
+        remaining_seconds = seconds % 60
+        return f"{minutes}m {remaining_seconds}s"
+
+
 def format_messages(parsed_messages):
     """Format the parsed messages into a text representation.
 
@@ -977,6 +1010,9 @@ def cli(
 
             log.debug("Start iteration")
             for i, window in enumerate(windows):
+                # Update iteration time for this window
+                view.update_iteration_time(i)
+
                 log.debug("Window %s", window)
                 # Extract web view first
                 web_view = extract_web_view(window)
