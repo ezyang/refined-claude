@@ -73,7 +73,8 @@ class SpinnerURLView:
     def update_iteration_time(self, index: int):
         """Update the iteration time for the specified window."""
         current_time = time.time()
-        self.iteration_times[index] = int(current_time - self.last_iteration_timestamps[index])
+        # Store iteration time in milliseconds, excluding sleep time
+        self.iteration_times[index] = int((current_time - self.last_iteration_timestamps[index]) * 1000)
         self.last_iteration_timestamps[index] = current_time
 
     def toggle_pause(self):
@@ -236,7 +237,7 @@ def ax_attr(element, attribute, default=not_set):
 def check_for_enter_key():
     """Check if the Enter key has been pressed.
 
-    This is a simplified version that uses blocking input and only looks for Enter key.
+    This is a non-blocking version that only looks for Enter key.
 
     Returns:
         True if Enter was pressed, False otherwise
@@ -245,8 +246,8 @@ def check_for_enter_key():
         return False
 
     try:
-        # Check if there's data to read with a short timeout
-        if select.select([sys.stdin], [], [], 0.1)[0]:
+        # Check if there's data to read with no timeout (non-blocking)
+        if select.select([sys.stdin], [], [], 0)[0]:
             # Read a line (until Enter is pressed)
             line = sys.stdin.readline().strip()
             return True  # Any input followed by Enter will toggle pause
@@ -782,24 +783,18 @@ def get_message_stats(content_element):
     return message_count, last_assistant_msg_length
 
 
-def format_time(seconds):
-    """Format seconds into a human-readable string.
+def format_time(milliseconds):
+    """Format milliseconds into a human-readable string.
 
-    For times less than 60 seconds, returns "Xs".
-    For times 60 seconds or greater, returns "Xm Ys".
+    Returns "Xms" for the millisecond value.
 
     Args:
-        seconds: Time in seconds
+        milliseconds: Time in milliseconds
 
     Returns:
-        str: Formatted time string
+        str: Formatted time string with millisecond precision
     """
-    if seconds < 60:
-        return f"{seconds}s"
-    else:
-        minutes = seconds // 60
-        remaining_seconds = seconds % 60
-        return f"{minutes}m {remaining_seconds}s"
+    return f"{milliseconds}ms"
 
 
 def format_messages(parsed_messages):
@@ -1005,14 +1000,13 @@ def cli(
             # Skip processing if paused, but still update the display
             if view.paused:
                 live.update(view)
-                time.sleep(0.1)
                 continue
+
+            # Start timestamp for active time measurement
+            iteration_start_time = time.time()
 
             log.debug("Start iteration")
             for i, window in enumerate(windows):
-                # Update iteration time for this window
-                view.update_iteration_time(i)
-
                 log.debug("Window %s", window)
                 # Extract web view first
                 web_view = extract_web_view(window)
@@ -1057,9 +1051,15 @@ def cli(
                     if snapshot_history:
                         run_snapshot_history(content_element, snapshot_history)
 
+                # Calculate active time spent in milliseconds
+                iteration_time_ms = int((time.time() - iteration_start_time) * 1000)
+                # Update iteration time (the active processing time only)
+                view.iteration_times[i] = iteration_time_ms
+                # Reset the timestamp for next iteration
+                view.last_iteration_timestamps[i] = time.time()
+
             # Refresh the live display with updated URLs
             live.update(view)
 
             if once:
                 return
-            time.sleep(1)
