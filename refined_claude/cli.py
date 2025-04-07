@@ -438,7 +438,53 @@ class HAX:
 # Auto approve
 
 
+
+
+
+
 def run_auto_approve(web_view, dry_run):
+    """Find and press the 'Allow for this chat' button for tool approvals.
+
+    This optimized version uses a targeted traversal approach to find the tool approval dialog,
+    then uses a limited findall only within that dialog to locate the button.
+    """
+    # First, look for the dialog by using pattern matching on the parent elements
+    # This is more efficient than using findall on the entire tree
+    dialog = None
+
+    # Look for the WebArea -> min-h-screen group -> bg-black group -> "Allow tool" dialog pattern
+    match web_view:
+        case HAX(role="AXWebArea", title="Claude"):
+            for main_group in web_view.children:
+                if main_group.role == "AXGroup" and "min-h-screen" in main_group.dom_class_list:
+                    for modal_group in main_group.children:
+                        if modal_group.role == "AXGroup" and "bg-black" in modal_group.dom_class_list:
+                            for tool_dialog in modal_group.children:
+                                if (tool_dialog.role == "AXGroup" and
+                                    tool_dialog.title and
+                                    tool_dialog.title.startswith("Allow tool")):
+                                    dialog = tool_dialog
+                                    log.debug("Found tool approval dialog using pattern matching")
+                                    break
+
+    # If dialog is found, look for the button only within the dialog
+    if dialog:
+        # Limit the search to the found dialog
+        buttons = dialog.findall(
+            lambda e: e.role == "AXButton" and e.title == "Allow for this chat"
+        )
+        if buttons:
+            button = buttons[0]
+            log.info("Found 'Allow for this chat' button using optimized search")
+            if dry_run:
+                log.info("Stopping now because of --dry-run")
+                return
+            button.press()
+            log.info("Pressed button")
+            return
+
+    # Fall back to the original approach if the optimized search fails
+    log.debug("Optimized search failed, falling back to full findall")
     buttons = web_view.findall(
         lambda e: e.role == "AXButton" and e.title == "Allow for this chat"
     )
@@ -446,8 +492,8 @@ def run_auto_approve(web_view, dry_run):
     if not buttons:
         return
     button = buttons[0]
-    log.info("Found 'Allow for this chat' button")
-    # TODO: allow verifying which tool is requested
+
+    log.info("Found 'Allow for this chat' button using fallback search")
     if dry_run:
         log.info("Stopping now because of --dry-run")
         return
