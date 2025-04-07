@@ -13,8 +13,9 @@ import re
 import select
 import sys
 import os
-from typing import NamedTuple, List
+from typing import NamedTuple, List, Optional
 from collections import defaultdict
+from dataclasses import dataclass
 from .logging import init_logging
 from .console import console
 from rich.live import Live
@@ -33,6 +34,14 @@ class ContinueHistory(NamedTuple):
     watermark: int
 
 
+@dataclass
+class MessageInfo:
+    """Represents a parsed message from the chat content."""
+    type: str  # "user" or "assistant"
+    content: List[str]  # List of parsed paragraphs
+    hit_max_length: bool = False  # Whether this is a max length message
+
+
 # Class to manage the spinner and URL display for each window
 class SpinnerURLView:
     def __init__(self, windows: List[HAX]):
@@ -44,12 +53,19 @@ class SpinnerURLView:
         self.paused = False
         # With the new implementation, we always use Enter key
         self.pause_key = "ENTER"
+        # Add new fields to track message count and last assistant message length
+        self.message_counts = [0 for _ in windows]
+        self.last_assistant_lengths = [0 for _ in windows]
 
     def update_url(self, index: int, url: str):
         self.urls[index] = url if url else "Not a Claude chat"
 
     def update_web_view(self, index: int, web_view):
         self.web_views[index] = web_view
+
+    def update_message_stats(self, index: int, message_count: int, last_assistant_length: int):
+        self.message_counts[index] = message_count
+        self.last_assistant_lengths[index] = last_assistant_length
 
     def toggle_pause(self):
         """Toggle the paused state"""
@@ -108,6 +124,23 @@ class SpinnerURLView:
             else:
                 # For non-URLs
                 line.append(Text(url if url else "", style="italic grey74", no_wrap=True))
+
+            # Add message count and last assistant message length if available
+            if self.message_counts[i] > 0:
+                # Compact format: "12m, C:345c" instead of "12 messages, last assistant: 345 chars"
+                line.append(" [")
+                line.append(Text(f"{self.message_counts[i]}m", style="cyan"))
+
+                if self.last_assistant_lengths[i] > 0:
+                    line.append(", ")
+                    line.append(Text(f"{self.last_assistant_lengths[i]}c", style="green"))
+
+                line.append("]")
+            elif url and url.startswith("https://claude.ai/chat/"):
+                # If we have a valid Claude URL but no messages detected
+                line.append(" [")
+                line.append(Text("no content", style="yellow dim"))
+                line.append("]")
 
             lines.append(line)
         return Group(*lines)
@@ -367,76 +400,38 @@ def run_auto_approve(web_view, dry_run):
 def run_auto_continue(web_view, dry_run, continue_history, index, content_element):
     """Auto-continue Claude chats when they hit the reply size limit."""
 
-    messages = content_element.children
+    parsed_messages = parse_content_element(content_element)
     should_continue = False
-    for i, message in enumerate(messages):
-        match message:
-            case HAX(dom_class_list={"group/thumbnail": True}):
-                continue
 
-            case HAX(dom_class_list={"cursor-pointer": True}):
-                continue
-
-            case HAX(dom_class_list={"p-1": True}):
-                break
-
-            case HAX(
-                dom_class_list={"group": True},
-                children_by_class={"font-claude-message": [inner]},
+    # Find the last hit_max_length message
+    for i, message in enumerate(parsed_messages):
+        if message.type == "assistant" and message.hit_max_length:
+            log.debug(
+                "assistant: hit the max length (%s, %s)",
+                i,
+                continue_history[index],
+            )
+            chat_url = get_chat_url(web_view)
+            if (
+                continue_history[index] is None
+                or continue_history[index].url != chat_url
+                or i > continue_history[index].watermark
             ):
-                match message.children[-1]:
-                    case HAX(
-                        children=[
-                            HAX(
-                                role="AXStaticText",
-                                value="Claude hit the max length for a message and has paused its response. You can write Continue to keep the chat going.",
-                            )
-                        ]
-                    ):
-                        log.debug(
-                            "assistant: hit the max length (%s, %s)",
-                            i,
-                            continue_history[index],
-                        )
-                        chat_url = get_chat_url(web_view)
-                        if (
-                            continue_history[index] is None
-                            or continue_history[index].url != chat_url
-                            or i > continue_history[index].watermark
-                        ):
-                            should_continue = True
-                            continue_history[index] = ContinueHistory(
-                                url=chat_url, watermark=i
-                            )
-                        else:
-                            log.debug(
-                                "...but we already attempted to continue this index, bail"
-                            )
-                            should_continue = False
-                    case _:
-                        log.debug("assistant: message")
-                        should_continue = False
-
-            case (
-                HAX(
-                    dom_class_list={"group": True},
-                    children=[HAX(role="AXStaticText"), *inners],
+                should_continue = True
+                continue_history[index] = ContinueHistory(
+                    url=chat_url, watermark=i
                 )
-                | HAX(
-                    children=[
-                        HAX(
-                            dom_class_list={"group": True},
-                            children=[HAX(role="AXStaticText"), *inners],
-                        )
-                    ]
+            else:
+                log.debug(
+                    "...but we already attempted to continue this index, bail"
                 )
-            ):
-                log.debug("user: message")
                 should_continue = False
-
-            case _:
-                log.warning("unrecognized message %s", message.repr(2))
-                pass
+        elif message.type == "assistant":
+            log.debug("assistant: message")
+            should_continue = False
+        elif message.type == "user":
+            log.debug("user: message")
+            should_continue = False
 
     if not should_continue:
         log.debug("Trailing continue not found, all done")
@@ -607,6 +602,115 @@ def find_chat_content_element(web_view):
     return target_group
 
 
+def parse_content_element(content_element):
+    """Parse content element once and return structured data.
+
+    This function unifies the parsing logic used by multiple features.
+
+    Args:
+        content_element: The HAX element containing the chat messages
+
+    Returns:
+        List[MessageInfo]: List of parsed messages with metadata
+    """
+    if content_element is None:
+        return []
+
+    messages = content_element.children
+    parsed_messages = []
+
+    for i, message in enumerate(messages):
+        # Skip certain message types
+        match message:
+            case HAX(dom_class_list={"group/thumbnail": True}):
+                log.debug("skipping thumbnail at %s", i)
+                continue
+
+            case HAX(dom_class_list={"cursor-pointer": True}):
+                continue
+
+            case HAX(dom_class_list={"p-1": True}):
+                log.debug("skipping %s message trailer", len(messages) - 1)
+                break
+
+            # Assistant message
+            case HAX(
+                dom_class_list={"group": True},
+                children_by_class={"font-claude-message": [inner]},
+            ):
+                # Parse the content
+                content_blocks = []
+                for para in inner.children:
+                    if "absolute" in para.dom_class_list:
+                        break  # message end
+                    content_blocks.append("\n".join(parse_para(para)))
+
+                # Check if this is a max length message
+                hit_max_length = False
+                if message.children:  # Only check the last child if there are children
+                    match message.children[-1]:
+                        case HAX(
+                            children=[
+                                HAX(
+                                    role="AXStaticText",
+                                    value="Claude hit the max length for a message and has paused its response. You can write Continue to keep the chat going.",
+                                )
+                            ]
+                        ):
+                            hit_max_length = True
+                            log.debug("assistant: hit the max length (%s)", i)
+
+                parsed_messages.append(
+                    MessageInfo(
+                        type="assistant",
+                        content=content_blocks,
+                        hit_max_length=hit_max_length,
+                    )
+                )
+
+            # User message
+            case (
+                HAX(
+                    dom_class_list={"group": True},
+                    children=[HAX(role="AXStaticText"), *inners],
+                )
+                | HAX(
+                    children=[
+                        HAX(
+                            dom_class_list={"group": True},
+                            children=[HAX(role="AXStaticText"), *inners],
+                        )
+                    ]
+                )
+            ):
+                content_blocks = []
+                for para in inners:
+                    if "absolute" in para.dom_class_list:
+                        break  # message end
+                    content_blocks.append("\n".join(parse_para(para)))
+
+                parsed_messages.append(
+                    MessageInfo(
+                        type="user",
+                        content=content_blocks,
+                        hit_max_length=False,
+                    )
+                )
+
+            # Unrecognized message
+            case _:
+                log.warning("unrecognized message %s", message.repr(2))
+                parsed_messages.append(
+                    MessageInfo(
+                        type="unknown",
+                        content=[message.inner_text()],
+                        hit_max_length=False,
+                    )
+                )
+
+    return parsed_messages
+
+
 def parse_para(para):
     """Parse a paragraph into lines, handling lists as well.  Conventionally
     these lines are joined together with a single newline."""
@@ -638,65 +742,56 @@ def parse_para(para):
     return ret
 
 
-def parse_messages(parent):
-    """Parse interleaved user/assistant messages"""
-    # TODO: Make the output result more structured
+def get_message_stats(content_element):
+    """Calculate message statistics from the content element.
 
-    # print("#####")
-    # print(parent.repr(1))
-    # print("#####")
+    Args:
+        content_element: The HAX element containing the chat messages
 
-    messages = parent.children
+    Returns:
+        tuple: (message_count, last_assistant_msg_length)
+    """
+    if content_element is None:
+        return 0, 0
+
+    parsed_messages = parse_content_element(content_element)
+    message_count = len(parsed_messages)
+
+    # Find the last assistant message and calculate its length
+    last_assistant_msg_length = 0
+    for message in reversed(parsed_messages):
+        if message.type == "assistant":
+            # Calculate total length of content in the message
+            content_text = "\n\n".join(message.content)
+            last_assistant_msg_length = len(content_text)
+            break
+
+    return message_count, last_assistant_msg_length
+
+
+def format_messages(parsed_messages):
+    """Format the parsed messages into a text representation.
+
+    Args:
+        parsed_messages: List of MessageInfo objects from parse_content_element
+
+    Returns:
+        str: Formatted text representation of the conversation
+    """
     ret = []  # messages
-    for i, message in enumerate(messages):
-        ret_message = []
-        match message:
-            case HAX(dom_class_list={"group/thumbnail": True}):
-                log.debug("skipping thumbnail at %s", i)
-                continue
 
-            case HAX(dom_class_list={"p-1": True}):
-                log.debug("skipping %s message trailer", len(messages) - 1)
-                break
+    for message in parsed_messages:
+        if message.type == "assistant":
+            label = "Assistant: "
+            content = "\n\n".join(message.content)
+        elif message.type == "user":
+            label = "User: "
+            content = "\n\n".join(message.content)
+        else:
+            label = "Unknown: "
+            content = "\n\n".join(message.content)
 
-            case HAX(
-                dom_class_list={"group": True},
-                children_by_class={"font-claude-message": [inner]},
-            ):
-                label = "Assistant: "
-                log.debug("assistant message %s", message.inner_text()[:40])
-                # TODO: distinguish tool calls in here
-                for para in inner.children:
-                    if "absolute" in para.dom_class_list:
-                        break  # message end
-                    ret_message.append("\n".join(parse_para(para)))
-
-            case (
-                HAX(
-                    dom_class_list={"group": True},
-                    children=[HAX(role="AXStaticText"), *inners],
-                )
-                | HAX(
-                    children=[
-                        HAX(
-                            dom_class_list={"group": True},
-                            children=[HAX(role="AXStaticText"), *inners],
-                        )
-                    ]
-                )
-            ):
-                label = "User: "
-                log.debug("user message %s", message.inner_text()[:40])
-                for para in inners:
-                    if "absolute" in para.dom_class_list:
-                        break  # message end
-                    ret_message.append("\n".join(parse_para(para)))
-
-            case _:
-                log.warning("unrecognized message %s", message.repr(2))
-                ret_message.append(message.inner_text())
-
-        ret.append(label + "\n\n" + "\n\n".join(ret_message))
+        ret.append(label + "\n\n" + content)
 
     return "\n\n----\n\n".join(ret)
 
@@ -705,7 +800,8 @@ def run_snapshot_history(content_element, output_file=None):
     """Capture text content from the chat and optionally save to a file."""
 
     log.debug("Taking snapshot of chat content")
-    text_content = parse_messages(content_element)
+    parsed_messages = parse_content_element(content_element)
+    text_content = format_messages(parsed_messages)
 
     if text_content:
         log.info("Captured %d text", len(text_content))
@@ -902,10 +998,14 @@ def cli(
                 # Only perform operations if we have a valid web view with Claude chat URL
                 # Find the chat content element once if needed
                 content_element = None
-                if auto_continue or snapshot_history:
-                    content_element = find_chat_content_element(web_view)
-                    if not content_element:
-                        log.debug("Could not find chat content element")
+                # Always find content element to get message statistics, regardless of features
+                content_element = find_chat_content_element(web_view)
+                if not content_element:
+                    log.debug("Could not find chat content element")
+                else:
+                    # Calculate and update message statistics for the status bar
+                    message_count, last_assistant_length = get_message_stats(content_element)
+                    view.update_message_stats(i, message_count, last_assistant_length)
 
                 # Run features that don't require content_element
                 if auto_approve:
@@ -915,6 +1015,7 @@ def cli(
 
                 # Run features that require content_element only if we found it
                 if content_element:
+                    # Parse content element once for all features that need it
                     if auto_continue:
                         run_auto_continue(web_view, dry_run, continue_history, i, content_element)
                     if snapshot_history:
