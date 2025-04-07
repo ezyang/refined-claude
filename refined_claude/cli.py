@@ -13,9 +13,10 @@ import re
 import select
 import sys
 import os
-from typing import NamedTuple, List, Optional
+from typing import NamedTuple, List, Optional, Dict, Any
 from collections import defaultdict
 from dataclasses import dataclass
+from contextlib import contextmanager
 from .logging import init_logging
 from .console import console
 from rich.live import Live
@@ -167,9 +168,7 @@ class SpinnerURLView:
                         segments = sorted(self.segment_times[i].items())
                         segment_texts = []
                         for code, time_ms in segments:
-                            # Only show if time is > 0ms to avoid clutter
-                            if time_ms > 0:
-                                segment_texts.append(f"{code}:{time_ms}ms")
+                            segment_texts.append(f"{code}:{time_ms}ms")
                         line.append(Text(", ".join(segment_texts), style="cyan"))
                         line.append(")")
 
@@ -258,28 +257,28 @@ def ax_attr(element, attribute, default=not_set):
 # Utilities
 
 
-class TimingSegment:
+@contextmanager
+def TimingSegment(segment_times: Dict[str, int], segment_code: str) -> Any:
     """Context manager for timing code segments and recording the duration.
 
     Usage:
         segment_times = {}
         with TimingSegment(segment_times, 'U'):
             # Code to time
+
+    Args:
+        segment_times: Dictionary to store timing results
+        segment_code: Single character code to identify the segment in the results
+
+    Yields:
+        None: The context manager doesn't provide a value, it just times the context
     """
-    def __init__(self, segment_times, segment_code):
-        self.segment_times = segment_times
-        self.segment_code = segment_code
-        self.start_time = None
-
-    def __enter__(self):
-        self.start_time = time.time()
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        duration = int((time.time() - self.start_time) * 1000)
-        self.segment_times[self.segment_code] = duration
-        # Don't suppress exceptions
-        return False
+    start_time = time.time()
+    try:
+        yield
+    finally:
+        duration = int((time.time() - start_time) * 1000)
+        segment_times[segment_code] = duration
 
 
 def check_for_enter_key():
@@ -1077,10 +1076,8 @@ def cli(
                     view.update_url(i, "No web view")
                     continue
 
-                # Segment U: URL checking
-                with TimingSegment(segment_times, 'U'):
-                    url = get_chat_url(web_view)
-                    view.update_url(i, url)
+                url = get_chat_url(web_view)
+                view.update_url(i, url)
 
                 if url is None:
                     log.debug("Not a Claude chat URL, skipping")
