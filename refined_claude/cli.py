@@ -564,43 +564,47 @@ def run_auto_continue(web_view, dry_run, continue_history, index, content_elemen
 # Notify on complete
 
 
-def run_notify_on_complete(web_view, running: list[int], i: int):
+def run_notify_on_complete(web_view, running: list[int], i: int, content_element):
     """Find the Stop Response button and track chat completion state.
 
     This optimized version uses a targeted traversal approach to find the
     Stop Response button at the expected position in the UI hierarchy.
+
+    Args:
+        web_view: The web view element
+        running: List tracking the running state of each window
+        i: The index of the current window
+        content_element: Pre-found chat content element (optional)
     """
-    # First, look for the main content structure and navigate to where the button should be
-    content_element = find_chat_content_element(web_view)
+    # Use the provided content_element if available, otherwise don't check for stop button
     stop_button = None
 
-    if content_element:
-        # Look for sticky footer by class rather than position
-        sticky_footer = None
-        for child in content_element.children:
-            match child:
-                case HAX(role="AXGroup", dom_class_list={"sticky": True, "bottom-0": True}):
-                    sticky_footer = child
-                    log.debug("Found sticky footer area by class")
-                    break
+    # Look for sticky footer by class rather than position
+    sticky_footer = None
+    for child in content_element.children:
+        match child:
+            case HAX(role="AXGroup", dom_class_list={"sticky": True, "bottom-0": True}):
+                sticky_footer = child
+                log.debug("Found sticky footer area by class")
+                break
 
-        if sticky_footer and sticky_footer.children:
-            # Match first child as input container
-            match sticky_footer.children[0]:
-                case HAX(role="AXGroup") as input_container:
+    if sticky_footer and sticky_footer.children:
+        # Match first child as input container
+        match sticky_footer.children[0]:
+            case HAX(role="AXGroup") as input_container:
 
-                    if input_container.children:
-                        # Match first child as button container
-                        match input_container.children[0]:
-                            case HAX(role="AXGroup") as button_container:
+                if input_container.children:
+                    # Match first child as button container
+                    match input_container.children[0]:
+                        case HAX(role="AXGroup") as button_container:
 
-                                # Look for Stop Response button among the button container's children
-                                for button in button_container.children:
-                                    match button:
-                                        case HAX(role="AXButton", description="Stop response"):
-                                            stop_button = button
-                                            log.debug("Found Stop Response button using targeted traversal")
-                                            break
+                            # Look for Stop Response button among the button container's children
+                            for button in button_container.children:
+                                match button:
+                                    case HAX(role="AXButton", description="Stop response"):
+                                        stop_button = button
+                                        log.debug("Found Stop Response button using targeted traversal")
+                                        break
 
     # Process the button state
     if running[i] and not stop_button:
@@ -1169,7 +1173,7 @@ def cli(
                 # Segment N: Notify on complete
                 if notify_on_complete:
                     with TimingSegment(segment_times, 'N'):
-                        run_notify_on_complete(web_view, running, i)
+                        run_notify_on_complete(web_view, running, i, content_element)
 
                 # Features that require content_element
                 if content_element:
