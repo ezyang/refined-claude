@@ -597,20 +597,9 @@ def run_auto_continue(web_view, dry_run, continue_history, index, content_elemen
 
     # Look for send button in the sticky footer
     # This approach is similar to how run_notify_on_complete finds buttons
-    for child in sticky_footer.children:
-        match child:
-            case HAX(role="AXGroup") as group_container:
-                # Look for the button container
-                for button_container in group_container.children:
-                    match button_container:
-                        case HAX(role="AXGroup"):
-                            # Look for the send button
-                            for button in button_container.children:
-                                match button:
-                                    case HAX(role="AXButton", description="Send message"):
-                                        send_button = button
-                                        log.debug("Found Send message button using pattern matching")
-                                        break
+    match sticky_footer.children:
+        case [HAX(children=[HAX(children=[*_, HAX(children=[HAX(role="AXButton", description="Send message") as button])])])]:
+            send_button = button
 
     if not send_button:
         log.warning("No send button found, skipping auto-continue")
@@ -619,8 +608,6 @@ def run_auto_continue(web_view, dry_run, continue_history, index, content_elemen
     if dry_run:
         log.info("Stopping now because of --dry-run")
         return
-
-    return
 
     send_button.press()
     log.info("Auto-continue triggered!")
