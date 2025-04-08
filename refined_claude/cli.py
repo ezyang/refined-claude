@@ -578,28 +578,20 @@ def run_auto_continue(web_view, dry_run, continue_history, index, content_elemen
 
     # If we couldn't find the textarea with pattern matching, fall back to findall
     if not textarea:
-        log.warning("Couldn't find textarea with pattern matching, falling back to findall")
-        textareas = web_view.findall(
-            lambda e: e.role == "AXTextArea" and "ProseMirror" in e.dom_class_list
+        log.warning(
+            "Can't find textarea: %s",
+            "\n".join(
+                [e.repr() for e in web_view.findall(lambda e: e.role == "AXTextArea")]
+            ),
         )
-        if len(textareas) != 1:
-            log.warning(
-                "Can't find textarea: %s",
-                "\n".join(
-                    [e.repr() for e in web_view.findall(lambda e: e.role == "AXTextArea")]
-                ),
-            )
-            return
-        textarea = textareas[0]
+        return
 
     if (contents := textarea.value) not in (
         "",
+        "Continue",
         "Reply to Claude...\n",
     ):
         log.info("But textbox already has contents '%s', aborting", contents)
-        return
-    if dry_run:
-        log.info("Stopping now because of --dry-run")
         return
     textarea.value = "Continue"
 
@@ -615,31 +607,20 @@ def run_auto_continue(web_view, dry_run, continue_history, index, content_elemen
                             # Look for the send button
                             for button in button_container.children:
                                 match button:
-                                    case HAX(role="AXButton", description="Send Message"):
+                                    case HAX(role="AXButton", description="Send message"):
                                         send_button = button
-                                        log.debug("Found Send Message button using pattern matching")
+                                        log.debug("Found Send message button using pattern matching")
                                         break
 
-    # If pattern matching fails, fall back to a more focused findall on the sticky footer
-    if not send_button and sticky_footer:
-        log.debug("Trying more focused findall on sticky footer")
-        send_buttons = sticky_footer.findall(
-            lambda e: e.role == "AXButton" and e.description == "Send Message"
-        )
-        if send_buttons:
-            send_button = send_buttons[0]
-            log.debug("Found Send Message button with focused findall")
-
-    # Last resort - search the entire web view as before
     if not send_button:
-        log.warning("Falling back to full web view search for send button")
-        send_buttons = web_view.findall(
-            lambda e: e.role == "AXButton" and e.description == "Send Message",
-        )
-        if not send_buttons:
-            log.warning("No send button found, skipping auto-continue")
-            return
-        send_button = send_buttons[0]
+        log.warning("No send button found, skipping auto-continue")
+        return
+
+    if dry_run:
+        log.info("Stopping now because of --dry-run")
+        return
+
+    return
 
     send_button.press()
     log.info("Auto-continue triggered!")
@@ -672,23 +653,29 @@ def run_notify_on_complete(web_view, running: list[int], i: int, content_element
                 log.debug("Found sticky footer area by class")
                 break
 
-    if sticky_footer and sticky_footer.children:
-        # Match first child as input container
-        match sticky_footer.children[0]:
-            case HAX(role="AXGroup") as input_container:
+    if not sticky_footer:
+        return
 
-                if input_container.children:
-                    # Match first child as button container
-                    match input_container.children[0]:
-                        case HAX(role="AXGroup") as button_container:
+    if not sticky_footer.children:
+        log.warning("Sticky footer has no children")
+        return
 
-                            # Look for Stop Response button among the button container's children
-                            for button in button_container.children:
-                                match button:
-                                    case HAX(role="AXButton", description="Stop response"):
-                                        stop_button = button
-                                        log.debug("Found Stop Response button using targeted traversal")
-                                        break
+    # Match first child as input container
+    match sticky_footer.children[0]:
+        case HAX(role="AXGroup") as input_container:
+
+            if input_container.children:
+                # Match first child as button container
+                match input_container.children[0]:
+                    case HAX(role="AXGroup") as button_container:
+
+                        # Look for Stop Response button among the button container's children
+                        for button in button_container.children:
+                            match button:
+                                case HAX(role="AXButton", description="Stop response"):
+                                    stop_button = button
+                                    log.debug("Found Stop Response button using targeted traversal")
+                                    break
 
     # Process the button state
     if running[i] and not stop_button:
