@@ -437,11 +437,6 @@ class HAX:
 
 # Auto approve
 
-
-
-
-
-
 def run_auto_approve(web_view, dry_run):
     """Find and press the 'Allow for this chat' button for tool approvals.
 
@@ -570,10 +565,45 @@ def run_auto_continue(web_view, dry_run, continue_history, index, content_elemen
 
 
 def run_notify_on_complete(web_view, running: list[int], i: int):
-    stop_response = web_view.findall(
-        lambda e: e.role == "AXButton" and e.description == "Stop Response",
-    )
-    if running[i] and not stop_response:
+    """Find the Stop Response button and track chat completion state.
+
+    This optimized version uses a targeted traversal approach to find the
+    Stop Response button at the expected position in the UI hierarchy.
+    """
+    # First, look for the main content structure and navigate to where the button should be
+    content_element = find_chat_content_element(web_view)
+    stop_button = None
+
+    if content_element:
+        # Look for sticky footer by class rather than position
+        sticky_footer = None
+        for child in content_element.children:
+            match child:
+                case HAX(role="AXGroup", dom_class_list={"sticky": True, "bottom-0": True}):
+                    sticky_footer = child
+                    log.debug("Found sticky footer area by class")
+                    break
+
+        if sticky_footer and sticky_footer.children:
+            # Match first child as input container
+            match sticky_footer.children[0]:
+                case HAX(role="AXGroup") as input_container:
+
+                    if input_container.children:
+                        # Match first child as button container
+                        match input_container.children[0]:
+                            case HAX(role="AXGroup") as button_container:
+
+                                # Look for Stop Response button among the button container's children
+                                for button in button_container.children:
+                                    match button:
+                                        case HAX(role="AXButton", description="Stop response"):
+                                            stop_button = button
+                                            log.debug("Found Stop Response button using targeted traversal")
+                                            break
+
+    # Process the button state
+    if running[i] and not stop_button:
         log.info("Detected chat response finished")
         running[i] = False
         subprocess.check_call(
@@ -583,7 +613,7 @@ def run_notify_on_complete(web_view, running: list[int], i: int):
                 'display notification "Claude response finished" with title "Claude" sound name "Glass"',
             ]
         )
-    elif not running[i] and stop_response:
+    elif not running[i] and stop_button:
         log.info("Detected chat response started")
         running[i] = True
 
@@ -1081,6 +1111,7 @@ def cli(
 
     # Start the live display
     with Live(view, console=console, refresh_per_second=8, auto_refresh=True) as live:
+        # live.stop()
         while True:
             # Check for keyboard input to toggle pause state
             if check_for_enter_key():
