@@ -468,32 +468,20 @@ def run_auto_approve(web_view, dry_run):
                                     break
 
     # If dialog is found, look for the button only within the dialog
-    if dialog:
-        # Limit the search to the found dialog
-        buttons = dialog.findall(
-            lambda e: e.role == "AXButton" and e.title == "Allow for this chat"
-        )
-        if buttons:
-            button = buttons[0]
-            log.info("Found 'Allow for this chat' button using optimized search")
-            if dry_run:
-                log.info("Stopping now because of --dry-run")
-                return
-            button.press()
-            log.info("Pressed button")
-            return
+    if not dialog:
+        log.debug("Dialog not found")
+        return
 
-    # Fall back to the original approach if the optimized search fails
-    log.debug("Optimized search failed, falling back to full findall")
-    buttons = web_view.findall(
+    # Limit the search to the found dialog
+    buttons = dialog.findall(
         lambda e: e.role == "AXButton" and e.title == "Allow for this chat"
     )
-    assert len(buttons) <= 1
     if not buttons:
+        log.warning("Button not found: %s", dialog.repr())
         return
-    button = buttons[0]
 
-    log.info("Found 'Allow for this chat' button using fallback search")
+    button = buttons[0]
+    log.info("Found 'Allow for this chat' button using optimized search")
     if dry_run:
         log.info("Stopping now because of --dry-run")
         return
