@@ -579,12 +579,6 @@ def run_notify_on_complete(web_view, running: list[int], i: int, content_element
     # Use the provided content_element if available, otherwise don't check for stop button
     stop_button = None
 
-    # Check if content_element is None before accessing its children
-    if content_element is None:
-        log.debug("No content element available, skipping stop button check")
-        # If we were running but there's no content element, don't change state
-        return
-
     # Look for sticky footer by class rather than position
     sticky_footer = None
     for child in content_element.children:
@@ -1176,13 +1170,13 @@ def cli(
                     with TimingSegment(segment_times, 'A'):
                         run_auto_approve(web_view, dry_run)
 
-                # Segment N: Notify on complete
-                if notify_on_complete:
-                    with TimingSegment(segment_times, 'N'):
-                        run_notify_on_complete(web_view, running, i, content_element)
-
                 # Features that require content_element
                 if content_element:
+                    # Segment N: Notify on complete
+                    if notify_on_complete:
+                        with TimingSegment(segment_times, 'N'):
+                            run_notify_on_complete(web_view, running, i, content_element)
+
                     # Segment C: Auto continue
                     if auto_continue:
                         with TimingSegment(segment_times, 'C'):
