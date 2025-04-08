@@ -840,10 +840,10 @@ def parse_content_element(content_element):
                             children=[
                                 HAX(
                                     role="AXStaticText",
-                                    value="Claude hit the max length for a message and has paused its response. You can write Continue to keep the chat going.",
+                                    value=value,
                                 )
                             ]
-                        ):
+                        ) if "hit the max length for a message" in value:
                             hit_max_length = True
                             log.debug("assistant: hit the max length (%s)", i)
 
@@ -1073,6 +1073,11 @@ def run_snapshot_history(content_element, output_file=None):
     help="Only enable snapshot-history to specified file and disable all other default features",
 )
 @click.option(
+    "--verbose/--no-verbose",
+    default=False,
+    help="Show debug log messages",
+)
+@click.option(
     "--dry-run/--no-dry-run",
     default=False,
     help="Don't make any changes, just log what would happen",
@@ -1099,8 +1104,9 @@ def cli(
     dry_run: bool,
     once: bool,
     default_features: bool,
+    verbose: bool,
 ):
-    init_logging()
+    init_logging(verbose)
 
     # If --only-snapshot-history is provided, use that path for snapshot_history
     if only_snapshot_history is not None:

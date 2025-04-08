@@ -101,20 +101,22 @@ class RichConsoleHandler(logging.Handler):
             pass
 
 
-def init_logging():
+def init_logging(verbose: bool):
     """Initialize logging with safeguards against cascading errors."""
 
     # Create our handler with anti-recursion protection
     handler = RichConsoleHandler()
     handler.setFormatter(GlogFormatter())
 
+    level = logging.DEBUG if verbose else logging.INFO
+
     # Configure basic logging with our handler
     # The force=True parameter ensures our configuration overrides any existing handlers
-    logging.basicConfig(level=logging.INFO, handlers=[handler], force=True)
+    logging.basicConfig(level=level, handlers=[handler], force=True)
 
     # Set the log level on the root logger
     root_logger = logging.getLogger()
-    root_logger.setLevel(logging.INFO)
+    root_logger.setLevel(level)
 
     # Add the once-only warning filter to prevent duplicate warnings
     root_logger.addFilter(OnceOnlyWarningFilter())
