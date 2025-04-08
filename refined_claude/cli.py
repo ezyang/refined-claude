@@ -579,6 +579,12 @@ def run_notify_on_complete(web_view, running: list[int], i: int, content_element
     # Use the provided content_element if available, otherwise don't check for stop button
     stop_button = None
 
+    # Check if content_element is None before accessing its children
+    if content_element is None:
+        log.debug("No content element available, skipping stop button check")
+        # If we were running but there's no content element, don't change state
+        return
+
     # Look for sticky footer by class rather than position
     sticky_footer = None
     for child in content_element.children:
