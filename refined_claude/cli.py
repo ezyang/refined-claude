@@ -487,7 +487,11 @@ def run_auto_approve(web_view, dry_run):
 
 
 def run_auto_continue(web_view, dry_run, continue_history, index, content_element):
-    """Auto-continue Claude chats when they hit the reply size limit."""
+    """Auto-continue Claude chats when they hit the reply size limit.
+
+    Uses targeted traversal to find the textarea and send button, which is more
+    efficient than using findall on the entire tree.
+    """
 
     parsed_messages = parse_content_element(content_element)
     should_continue = False
@@ -526,18 +530,68 @@ def run_auto_continue(web_view, dry_run, continue_history, index, content_elemen
         log.debug("Trailing continue not found, all done")
         return
     log.info("Found 'hit the max length' at end of chat")
-    textareas = web_view.findall(
-        lambda e: e.role == "AXTextArea" and "ProseMirror" in e.dom_class_list
-    )
-    if len(textareas) != 1:
-        log.warning(
-            "Can't find textarea: %s",
-            "\n".join(
-                [e.repr() for e in web_view.findall(lambda e: e.role == "AXTextArea")]
-            ),
-        )
+
+    # Find textarea and send button using pattern matching instead of findall
+    textarea = None
+    send_button = None
+
+    # First find the sticky footer - this is a key pattern we can see in both run_notify_on_complete
+    # and in the path information
+    sticky_footer = None
+    for child in content_element.children:
+        match child:
+            case HAX(role="AXGroup", dom_class_list=classes) if "sticky" in classes and "bottom-0" in classes:
+                sticky_footer = child
+                log.debug("Found sticky footer area by class")
+                break
+
+    if not sticky_footer:
+        log.warning("Can't find sticky footer area")
         return
-    (textarea,) = textareas
+
+    # Find the input container with the textarea
+    for child in sticky_footer.children:
+        match child:
+            case HAX(role="AXGroup") as input_container:
+                # Look for the textarea in this container
+                # First find the rounded container that holds the textarea
+                for group in input_container.children:
+                    match group:
+                        case HAX(role="AXGroup", dom_class_list=classes) if "rounded-2xl" in classes:
+                            # Once we find the rounded container, navigate to the ProseMirror textarea
+                            # The path shows multiple nested containers, we need to go through each
+                            for sub_group in group.children:
+                                # The relative container
+                                match sub_group:
+                                    case HAX(role="AXGroup", dom_class_list=classes) if "relative" in classes:
+                                        # The overflow container
+                                        for overflow_container in sub_group.children:
+                                            match overflow_container:
+                                                case HAX(role="AXGroup", dom_class_list=classes) if "overflow-y-auto" in classes:
+                                                    # Finally look for the ProseMirror textarea
+                                                    for text_area in overflow_container.children:
+                                                        match text_area:
+                                                            case HAX(role="AXTextArea", dom_class_list=classes) if "ProseMirror" in classes:
+                                                                textarea = text_area
+                                                                log.debug("Found ProseMirror textarea using pattern matching")
+                                                                break
+
+    # If we couldn't find the textarea with pattern matching, fall back to findall
+    if not textarea:
+        log.warning("Couldn't find textarea with pattern matching, falling back to findall")
+        textareas = web_view.findall(
+            lambda e: e.role == "AXTextArea" and "ProseMirror" in e.dom_class_list
+        )
+        if len(textareas) != 1:
+            log.warning(
+                "Can't find textarea: %s",
+                "\n".join(
+                    [e.repr() for e in web_view.findall(lambda e: e.role == "AXTextArea")]
+                ),
+            )
+            return
+        textarea = textareas[0]
+
     if (contents := textarea.value) not in (
         "",
         "Reply to Claude...\n",
@@ -548,14 +602,45 @@ def run_auto_continue(web_view, dry_run, continue_history, index, content_elemen
         log.info("Stopping now because of --dry-run")
         return
     textarea.value = "Continue"
-    send_buttons = web_view.findall(
-        lambda e: e.role == "AXButton" and e.description == "Send Message",
-    )
-    if not send_buttons:
-        # TODO: shift window into focus and try again
-        log.warning("No send button found, skipping auto-continue")
-        return
-    send_button = send_buttons[0]
+
+    # Look for send button in the sticky footer
+    # This approach is similar to how run_notify_on_complete finds buttons
+    for child in sticky_footer.children:
+        match child:
+            case HAX(role="AXGroup") as group_container:
+                # Look for the button container
+                for button_container in group_container.children:
+                    match button_container:
+                        case HAX(role="AXGroup"):
+                            # Look for the send button
+                            for button in button_container.children:
+                                match button:
+                                    case HAX(role="AXButton", description="Send Message"):
+                                        send_button = button
+                                        log.debug("Found Send Message button using pattern matching")
+                                        break
+
+    # If pattern matching fails, fall back to a more focused findall on the sticky footer
+    if not send_button and sticky_footer:
+        log.debug("Trying more focused findall on sticky footer")
+        send_buttons = sticky_footer.findall(
+            lambda e: e.role == "AXButton" and e.description == "Send Message"
+        )
+        if send_buttons:
+            send_button = send_buttons[0]
+            log.debug("Found Send Message button with focused findall")
+
+    # Last resort - search the entire web view as before
+    if not send_button:
+        log.warning("Falling back to full web view search for send button")
+        send_buttons = web_view.findall(
+            lambda e: e.role == "AXButton" and e.description == "Send Message",
+        )
+        if not send_buttons:
+            log.warning("No send button found, skipping auto-continue")
+            return
+        send_button = send_buttons[0]
+
     send_button.press()
     log.info("Auto-continue triggered!")
 
