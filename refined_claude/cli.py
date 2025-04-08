@@ -164,8 +164,7 @@ class SpinnerURLView:
                     # Add segment times if available
                     if hasattr(self, 'segment_times') and self.segment_times[i]:
                         line.append(" (")
-                        # Sort by segment code for consistent display
-                        segments = sorted(self.segment_times[i].items())
+                        segments = self.segment_times[i].items()
                         segment_texts = []
                         for code, time_ms in segments:
                             segment_texts.append(f"{code}:{time_ms}ms")
@@ -1152,26 +1151,23 @@ def cli(
                     log.debug("Not a Claude chat URL, skipping")
                     continue
 
+                # Segment A: Auto approve
+                # (This modal is distinct from the content element
+                # apparently?  Or maybe I misunderstood the parsing logic lol)
+                if auto_approve:
+                    with TimingSegment(segment_times, 'A'):
+                        run_auto_approve(web_view, dry_run)
+
                 # Find content element - we don't track this timing as it's cheap
                 content_element = find_chat_content_element(web_view)
 
-                if not content_element:
-                    log.debug("Could not find chat content element")
-                else:
+                # Features that require content_element
+                if content_element:
                     # Segment M: Message stats
                     with TimingSegment(segment_times, 'M'):
                         message_count, last_assistant_length = get_message_stats(content_element)
                         view.update_message_stats(i, message_count, last_assistant_length)
 
-                # Run features with detailed timing
-
-                # Segment A: Auto approve
-                if auto_approve:
-                    with TimingSegment(segment_times, 'A'):
-                        run_auto_approve(web_view, dry_run)
-
-                # Features that require content_element
-                if content_element:
                     # Segment N: Notify on complete
                     if notify_on_complete:
                         with TimingSegment(segment_times, 'N'):
@@ -1181,7 +1177,6 @@ def cli(
                     if auto_continue:
                         with TimingSegment(segment_times, 'C'):
                             run_auto_continue(web_view, dry_run, continue_history, i, content_element)
-
                     # Segment S: Snapshot history
                     if snapshot_history:
                         with TimingSegment(segment_times, 'S'):
