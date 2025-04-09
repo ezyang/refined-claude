@@ -1,43 +1,27 @@
 from __future__ import annotations
 
-import ApplicationServices
-import HIServices
 import logging
-import threading
 from collections import defaultdict
-from typing import Any, NamedTuple, List, Optional, Dict
+from typing import Any, List, Optional, Dict
 
-# Thread-local storage for API mode flag
-_thread_local = threading.local()
-not_set = object()
+from .accessibility_api import (
+    AccessibilityElement,
+    get_api,
+    is_using_fake_api as is_using_fake_apis,
+    set_using_fake_api as set_using_fake_apis,
+    not_set
+)
+
 log = logging.getLogger(__name__)
-
-
-def is_using_fake_apis() -> bool:
-    """Check if we're using fake APIs for testing.
-
-    Thread-safe using thread-local storage.
-    """
-    return getattr(_thread_local, "using_fake_apis", False)
-
-
-def set_using_fake_apis(using_fake: bool = True) -> None:
-    """Set whether we're using fake APIs for testing.
-
-    Thread-safe using thread-local storage.
-    """
-    _thread_local.using_fake_apis = using_fake
 
 
 def ax_attr(element, attribute, default=not_set):
     """Get an accessibility attribute from an element.
 
-    This function works with both real and fake APIs. When using fake APIs,
-    it will use the fake implementation of AXUIElementCopyAttributeValue.
+    This function works with both real and fake APIs, using the current API implementation.
     """
-    error, value = ApplicationServices.AXUIElementCopyAttributeValue(
-        element, attribute, None
-    )
+    api = get_api()
+    error, value = api.AXUIElementCopyAttributeValue(element, attribute, None)
     if error:
         if default is not not_set:
             return default
@@ -46,15 +30,16 @@ def ax_attr(element, attribute, default=not_set):
 
 
 class HAX:
-    def __init__(self, elem):
-        self.elem = elem  # underlying pyobjc
+    def __init__(self, elem, api=None):
+        self.elem = elem  # underlying accessibility element
+        self.api = api or get_api()  # Store the API reference
 
     def _get(self, name, default=not_set):
         return ax_attr(self.elem, name, default)
 
     def _dir(self):
         """Get all attribute names for this element."""
-        error, attribute_names = ApplicationServices.AXUIElementCopyAttributeNames(
+        error, attribute_names = self.api.AXUIElementCopyAttributeNames(
             self.elem, None
         )
         if error:
@@ -72,7 +57,8 @@ class HAX:
 
     @property
     def children(self):
-        return [HAX(e) for e in self._get("AXChildren", [])]
+        # Pass the API reference to child HAX objects
+        return [HAX(e, self.api) for e in self._get("AXChildren", [])]
 
     @property
     def title(self):
@@ -84,7 +70,8 @@ class HAX:
 
     @property
     def windows(self):
-        return [HAX(w) for w in self._get("AXWindows", "")]
+        # Pass the API reference to child HAX objects
+        return [HAX(w, self.api) for w in self._get("AXWindows", [])]
 
     @property
     def value(self):
@@ -92,7 +79,7 @@ class HAX:
 
     @value.setter
     def value(self, v):
-        result = HIServices.AXUIElementSetAttributeValue(self.elem, "AXValue", v)
+        result = self.api.AXUIElementSetAttributeValue(self.elem, "AXValue", v)
         if result != 0:
             raise RuntimeError(f"Failed to set value on {self}")
 
@@ -100,7 +87,8 @@ class HAX:
     def parent(self):
         r = self._get("AXParent", "")
         if r is not None:
-            return HAX(r)
+            # Pass the API reference to parent HAX object
+            return HAX(r, self.api)
         else:
             return None
 
@@ -145,7 +133,7 @@ class HAX:
         return self.repr(0)
 
     def press(self):
-        HIServices.AXUIElementPerformAction(self.elem, "AXPress")
+        self.api.AXUIElementPerformAction(self.elem, "AXPress")
 
     def findall(self, pred):
         results = []

@@ -3,17 +3,23 @@ from __future__ import annotations
 import os
 import logging
 import xml.etree.ElementTree as ET
-import threading
-from typing import Dict, Any, Optional, List, Set, Tuple, Callable, Protocol
+from typing import Dict, Any, Optional, List, Set, Tuple, Callable, TypeVar
+
+from .accessibility_api import (
+    AccessibilityAPI,
+    AccessibilityElement,
+    get_api,
+    set_api,
+    is_using_fake_api,
+    set_using_fake_api,
+    kAXErrorSuccess,
+    kAXErrorNoValue,
+    kAXErrorAttributeUnsupported
+)
 
 log = logging.getLogger(__name__)
 
-# Constants for error codes (mirroring Objective-C constants)
-kAXErrorSuccess = 0
-kAXErrorNoValue = -25300
-kAXErrorAttributeUnsupported = -25205
-
-class AXUIElement:
+class AXUIElement(AccessibilityElement):
     """Fake implementation of the AXUIElement class."""
     def __init__(self, element_id: str, xml_node: ET.Element):
         self.element_id = element_id
@@ -23,7 +29,8 @@ class AXUIElement:
         role = self.xml_node.tag
         return f"<FakeAXUIElement id={self.element_id} role={role}>"
 
-class FakeAccessibilityAPI:
+
+class FakeAccessibilityAPI(AccessibilityAPI):
     """A fake implementation of the macOS Accessibility APIs for testing."""
 
     def __init__(self, snapshot_path: str):
@@ -87,10 +94,10 @@ class FakeAccessibilityAPI:
 
         return next_id
 
-    # Fake API implementations that mirror the actual Objective-C APIs
+    # API implementations that mirror the actual Objective-C APIs
 
     def AXUIElementCopyAttributeValue(self, element: AXUIElement, attribute: str, out_value: Optional[Any] = None) -> Tuple[int, Any]:
-        """Simulate AXUIElementCopyAttributeValue API call."""
+        """Get an attribute value from an accessibility element."""
         if not isinstance(element, AXUIElement):
             return kAXErrorNoValue, None
 
@@ -148,7 +155,7 @@ class FakeAccessibilityAPI:
         return kAXErrorAttributeUnsupported, None
 
     def AXUIElementCopyAttributeNames(self, element: AXUIElement, out_names: Optional[List[str]] = None) -> Tuple[int, List[str]]:
-        """Simulate AXUIElementCopyAttributeNames API call."""
+        """Get the names of all attributes of an accessibility element."""
         if not isinstance(element, AXUIElement):
             return kAXErrorNoValue, []
 
@@ -166,7 +173,7 @@ class FakeAccessibilityAPI:
         return kAXErrorSuccess, attributes
 
     def AXUIElementSetAttributeValue(self, element: AXUIElement, attribute: str, value: Any) -> int:
-        """Simulate AXUIElementSetAttributeValue API call."""
+        """Set an attribute value on an accessibility element."""
         if not isinstance(element, AXUIElement):
             return kAXErrorNoValue
 
@@ -179,7 +186,7 @@ class FakeAccessibilityAPI:
         return kAXErrorAttributeUnsupported
 
     def AXUIElementPerformAction(self, element: AXUIElement, action: str) -> int:
-        """Simulate AXUIElementPerformAction API call."""
+        """Perform an action on an accessibility element."""
         if not isinstance(element, AXUIElement):
             return kAXErrorNoValue
 
@@ -188,7 +195,7 @@ class FakeAccessibilityAPI:
         return kAXErrorSuccess
 
     def AXUIElementCreateApplication(self, pid: int) -> AXUIElement:
-        """Simulate AXUIElementCreateApplication API call."""
+        """Create an accessibility element for an application."""
         # In testing, just return the first root element
         if self.root_elements:
             return self.root_elements[0]
@@ -198,67 +205,31 @@ class FakeAccessibilityAPI:
         return AXUIElement("dummy", dummy_xml)
 
 
-# Thread-local storage for API instance and state
-_thread_local = threading.local()
-
 def get_fake_api() -> FakeAccessibilityAPI:
-    """Get the thread-local instance of the fake API.
+    """Get the instance of the fake API."""
+    api = get_api()
+    if not isinstance(api, FakeAccessibilityAPI):
+        raise RuntimeError("Current API is not a FakeAccessibilityAPI. Call init_fake_api first.")
+    return api
 
-    Thread-safe using thread-local storage.
-    """
-    if not hasattr(_thread_local, "fake_api_instance") or _thread_local.fake_api_instance is None:
-        raise RuntimeError("Fake API not initialized for this thread. Call init_fake_api first.")
-    return _thread_local.fake_api_instance
 
 def init_fake_api(snapshot_path: str) -> FakeAccessibilityAPI:
-    """Initialize the thread-local fake API with a snapshot file.
+    """Initialize the fake API with a snapshot file."""
+    fake_api = FakeAccessibilityAPI(snapshot_path)
+    set_api(fake_api)
+    return fake_api
 
-    Thread-safe using thread-local storage.
-    """
-    _thread_local.fake_api_instance = FakeAccessibilityAPI(snapshot_path)
-    return _thread_local.fake_api_instance
-
-def is_using_fake_api() -> bool:
-    """Check if we're using fake APIs for testing.
-
-    Thread-safe using thread-local storage.
-    """
-    return getattr(_thread_local, "use_fake_api", False)
 
 def use_fake_api(snapshot_path: Optional[str] = None) -> None:
-    """Switch to using the fake API.
-
-    Thread-safe using thread-local storage.
-    """
-    _thread_local.use_fake_api = True
+    """Switch to using the fake API."""
+    set_using_fake_api(True)
 
     if snapshot_path:
         init_fake_api(snapshot_path)
 
-    # Monkey patch the ApplicationServices module
-    if "ApplicationServices" in globals():
-        global ApplicationServices
-        fake_api = get_fake_api()
-
-        # Replace the API functions with our fake implementations
-        ApplicationServices.AXUIElementCopyAttributeValue = fake_api.AXUIElementCopyAttributeValue
-        ApplicationServices.AXUIElementCopyAttributeNames = fake_api.AXUIElementCopyAttributeNames
-
-    # Monkey patch the HIServices module
-    if "HIServices" in globals():
-        global HIServices
-        fake_api = get_fake_api()
-
-        # Replace the API functions with our fake implementations
-        HIServices.AXUIElementSetAttributeValue = fake_api.AXUIElementSetAttributeValue
-        HIServices.AXUIElementPerformAction = fake_api.AXUIElementPerformAction
 
 def use_real_api() -> None:
-    """Switch back to using the real API.
-
-    Thread-safe using thread-local storage.
-    """
-    _thread_local.use_fake_api = False
-
-    # We'd need to restore the original functions here
-    # But for simplicity, we'll rely on module reloading to restore them
+    """Switch back to using the real API."""
+    from .accessibility_api import RealAccessibilityAPI
+    set_using_fake_api(False)
+    set_api(RealAccessibilityAPI())

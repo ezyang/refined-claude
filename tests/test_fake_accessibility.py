@@ -21,7 +21,8 @@ sys.modules['HIServices'] = mock_HIServices
 
 # Now import our modules
 from refined_claude.fake_accessibility import FakeAccessibilityAPI, init_fake_api, use_fake_api, is_using_fake_api, get_fake_api, AXUIElement
-from refined_claude.accessibility import HAX, set_using_fake_apis
+from refined_claude.accessibility import HAX
+from refined_claude.accessibility_api import set_using_fake_api as set_using_fake_apis, get_api, set_api, RealAccessibilityAPI
 
 
 class TestFakeAccessibilityAPI(unittest.TestCase):
@@ -180,13 +181,11 @@ class TestFakeAccessibilityAPI(unittest.TestCase):
         self.assertEqual(value, new_value)
 
 
-@patch('refined_claude.accessibility.ApplicationServices', mock_ApplicationServices)
-@patch('refined_claude.accessibility.HIServices', mock_HIServices)
 class TestHAXWithFakeAPI(unittest.TestCase):
     """Test that HAX works correctly with the fake API."""
 
     def setUp(self):
-        """Set up a fake API and patch the necessary modules."""
+        """Set up a fake API."""
         # Create a simple XML snapshot
         self.temp_file = tempfile.NamedTemporaryFile(suffix='.xml', delete=False)
 
@@ -203,17 +202,8 @@ class TestHAXWithFakeAPI(unittest.TestCase):
         tree.write(self.temp_file.name)
         self.temp_file.close()
 
-        # Initialize the fake API
-        init_fake_api(self.temp_file.name)
-
-        # Set up patched functions
-        fake_api = get_fake_api()
-        mock_ApplicationServices.AXUIElementCopyAttributeValue.side_effect = fake_api.AXUIElementCopyAttributeValue
-        mock_ApplicationServices.AXUIElementCopyAttributeNames.side_effect = fake_api.AXUIElementCopyAttributeNames
-        mock_HIServices.AXUIElementSetAttributeValue.side_effect = fake_api.AXUIElementSetAttributeValue
-        mock_HIServices.AXUIElementPerformAction.side_effect = fake_api.AXUIElementPerformAction
-
-        # Set using fake APIs
+        # Create and set the fake API
+        self.fake_api = init_fake_api(self.temp_file.name)
         set_using_fake_apis(True)
 
     def tearDown(self):
@@ -223,14 +213,12 @@ class TestHAXWithFakeAPI(unittest.TestCase):
 
         # Reset to real API
         set_using_fake_apis(False)
+        set_api(RealAccessibilityAPI())
 
     def test_hax_with_fake_api(self):
         """Test that HAX works with the fake API."""
-        # Get the fake API
-        fake_api = get_fake_api()
-
         # Get the window element (first root element)
-        window_element = fake_api.root_elements[0]
+        window_element = self.fake_api.root_elements[0]
 
         # Create a HAX object with the fake element
         window_hax = HAX(window_element)
@@ -272,13 +260,15 @@ class TestEmptyStringHandling(unittest.TestCase):
         self.temp_file.close()
 
         # Initialize the fake API with the snapshot
-        init_fake_api(self.temp_file.name)
-        self.fake_api = get_fake_api()
+        self.fake_api = init_fake_api(self.temp_file.name)
 
     def tearDown(self):
         """Clean up temporary files."""
         if os.path.exists(self.temp_file.name):
             os.unlink(self.temp_file.name)
+
+        # Reset API to default
+        set_api(RealAccessibilityAPI())
 
     def test_missing_attributes_default_to_empty_string(self):
         """Test that certain missing attributes default to empty string."""

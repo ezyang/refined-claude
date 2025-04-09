@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import click
 import AppKit
-import ApplicationServices
 import time
 import logging
 from typing import Optional
@@ -10,7 +9,8 @@ from rich.live import Live
 
 from .logging import init_logging
 from .console import console
-from .accessibility import HAX, extract_web_view, get_chat_url, find_chat_content_element, set_using_fake_apis
+from .accessibility import HAX, extract_web_view, get_chat_url, find_chat_content_element
+from .accessibility_api import get_api, set_using_fake_api as set_using_fake_apis
 from .ui import SpinnerURLView, check_for_enter_key
 from .parsing import get_message_stats
 from .features import (
@@ -186,9 +186,10 @@ def run(
 
     # NB: Claude is only queried at process start (maybe add an option to
     # requery every loop iteration
+    api = get_api()
     apps = AppKit.NSWorkspace.sharedWorkspace().runningApplications()
     claude_apps = [
-        HAX(ApplicationServices.AXUIElementCreateApplication(app.processIdentifier()))
+        HAX(api.AXUIElementCreateApplication(app.processIdentifier()))
         for app in apps
         if app.localizedName() == "Claude"
     ]

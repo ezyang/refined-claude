@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
 """
 Test the thread safety of the fake accessibility API.
+
+NOTE: After the refactoring to use class-based API implementations,
+thread-local storage is no longer used, so this test is modified to
+just verify the basic API functionality across threads.
 """
 
 import sys
@@ -19,12 +23,12 @@ sys.modules['ApplicationServices'] = mock_ApplicationServices
 sys.modules['HIServices'] = mock_HIServices
 
 # Now import our modules
-from refined_claude.fake_accessibility import init_fake_api, use_fake_api, is_using_fake_api
-from refined_claude.accessibility import set_using_fake_apis, is_using_fake_apis
+from refined_claude.fake_accessibility import init_fake_api, get_fake_api
+from refined_claude.accessibility_api import RealAccessibilityAPI, get_api, set_api
 
 
-class TestThreadSafety(unittest.TestCase):
-    """Test the thread safety of the fake accessibility API."""
+class TestMultiThreadAccess(unittest.TestCase):
+    """Test that the API works correctly across multiple threads."""
 
     def setUp(self):
         """Create a simple XML snapshot for testing."""
@@ -40,45 +44,47 @@ class TestThreadSafety(unittest.TestCase):
         tree.write(self.temp_file.name)
         self.temp_file.close()
 
-        # Initialize the fake API with the snapshot
-        init_fake_api(self.temp_file.name)
+        # Create a fake API instance
+        self.fake_api = init_fake_api(self.temp_file.name)
 
     def tearDown(self):
         """Clean up temporary files."""
         if os.path.exists(self.temp_file.name):
             os.unlink(self.temp_file.name)
 
-    def test_thread_local_api_mode(self):
-        """Test that API mode flags are thread-local."""
-        # Define a list to store results from different threads
-        results = []
-        result_lock = threading.Lock()
+        # Reset to real API
+        set_api(RealAccessibilityAPI())
 
-        def thread_function(thread_id):
-            # Set different API modes in different threads
-            if thread_id % 2 == 0:
-                set_using_fake_apis(True)
-                use_fake_api()
-            else:
-                set_using_fake_apis(False)
-                # Note: We don't call use_real_api() here since it would
-                # require actually loading the real modules
+    def test_multi_thread_access(self):
+        """Test that each thread can access the correct API implementation."""
+        # In our new design, all threads share the same API implementation
+        # So this test just verifies that multiple threads can access the API
 
-            # Capture the value for the current thread
-            with result_lock:
-                results.append((
-                    thread_id,
-                    is_using_fake_apis(),
-                    is_using_fake_api()
-                ))
+        def thread_function(thread_id, results, lock):
+            # Get the API and verify it's the fake API
+            api = get_api()
+
+            # Verify we can access the root elements
+            root_elements = getattr(api, 'root_elements', None)
+
+            with lock:
+                # Just record success/failure
+                results.append((thread_id, root_elements is not None))
 
             # Sleep to allow thread scheduling
             time.sleep(0.01)
 
+        # Define a list to store results from different threads
+        results = []
+        result_lock = threading.Lock()
+
         # Create and start multiple threads
         threads = []
         for i in range(10):
-            thread = threading.Thread(target=thread_function, args=(i,))
+            thread = threading.Thread(
+                target=thread_function,
+                args=(i, results, result_lock)
+            )
             threads.append(thread)
             thread.start()
 
@@ -86,11 +92,12 @@ class TestThreadSafety(unittest.TestCase):
         for thread in threads:
             thread.join()
 
-        # Verify that each thread saw the correct values
-        for thread_id, cli_using_fake, fake_using_fake in results:
-            expected_fake = (thread_id % 2 == 0)
-            self.assertEqual(cli_using_fake, expected_fake)
-            self.assertEqual(fake_using_fake, expected_fake)
+        # Verify that each thread could access the API
+        for thread_id, success in results:
+            self.assertTrue(success, f"Thread {thread_id} failed to access the API")
+
+        # Verify we got results from all threads
+        self.assertEqual(len(results), 10)
 
 
 if __name__ == "__main__":
