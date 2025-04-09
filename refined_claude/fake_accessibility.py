@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import logging
 import xml.etree.ElementTree as ET
+import threading
 from typing import Dict, Any, Optional, List, Set, Tuple, Callable, Protocol
 
 log = logging.getLogger(__name__)
@@ -40,37 +41,51 @@ class FakeAccessibilityAPI:
             tree = ET.parse(snapshot_path)
             root = tree.getroot()
 
+            # Counter for generating sequential IDs
+            next_id = 1
+
             # Process all window elements directly under the root
             for window_elem in root.findall("*"):
                 if window_elem.tag == "Metadata":
                     continue  # Skip metadata
 
-                window_id = window_elem.get("id")
-                if window_id:
-                    window = AXUIElement(window_id, window_elem)
-                    self.elements_by_id[window_id] = window
-                    self.root_elements.append(window)
+                # Assign a sequential ID
+                window_id = str(next_id)
+                next_id += 1
+
+                window = AXUIElement(window_id, window_elem)
+                self.elements_by_id[window_id] = window
+                self.root_elements.append(window)
 
             # Process all other elements
-            self._process_element_children(root)
+            self._process_element_children(root, next_id)
 
             log.info(f"Loaded {len(self.elements_by_id)} elements from snapshot")
         except Exception as e:
             log.error(f"Error loading snapshot: {e}")
             raise
 
-    def _process_element_children(self, parent_xml: ET.Element):
-        """Recursively process all child elements in the XML tree."""
+    def _process_element_children(self, parent_xml: ET.Element, next_id: int) -> int:
+        """Recursively process all child elements in the XML tree.
+
+        Returns:
+            int: The updated next_id value
+        """
         for elem in parent_xml.findall("*"):
             if elem.tag == "Metadata":
                 continue
 
-            elem_id = elem.get("id")
-            if elem_id and elem_id not in self.elements_by_id:
-                element = AXUIElement(elem_id, elem)
-                self.elements_by_id[elem_id] = element
+            # Assign a sequential ID
+            elem_id = str(next_id)
+            next_id += 1
 
-            self._process_element_children(elem)
+            element = AXUIElement(elem_id, elem)
+            self.elements_by_id[elem_id] = element
+
+            # Process children recursively
+            next_id = self._process_element_children(elem, next_id)
+
+        return next_id
 
     # Fake API implementations that mirror the actual Objective-C APIs
 
@@ -83,18 +98,30 @@ class FakeAccessibilityAPI:
         if attribute == "AXChildren":
             children = []
             for child in element.xml_node:
-                child_id = child.get("id")
-                if child_id and child_id in self.elements_by_id:
-                    children.append(self.elements_by_id[child_id])
+                if child.tag == "Metadata":
+                    continue
+
+                # Find the corresponding AXUIElement for this XML node
+                for elem_id, elem in self.elements_by_id.items():
+                    if elem.xml_node == child:
+                        children.append(elem)
+                        break
+
             return kAXErrorSuccess, children
+
+        # For AXRole attribute, return the tag name of the XML element
+        if attribute == "AXRole":
+            return kAXErrorSuccess, element.xml_node.tag
 
         # For AXParent attribute, find the parent element
         if attribute == "AXParent":
-            # We need to find which element has this one as a child
+            # Find which element has this one as a child
             for elem_id, elem in self.elements_by_id.items():
                 for child in elem.xml_node:
-                    if child.get("id") == element.element_id:
+                    # Compare XML nodes directly
+                    if child == element.xml_node:
                         return kAXErrorSuccess, elem
+
             return kAXErrorSuccess, None  # No parent found
 
         # For other attributes, retrieve from XML attributes
@@ -103,7 +130,7 @@ class FakeAccessibilityAPI:
 
             # Handle special types
             if attribute == "AXDOMClassList":
-                # Convert space-separated string back to list
+                # Convert space-separated string (HTML-style) back to list
                 return kAXErrorSuccess, value.split()
 
             # Handle boolean values
@@ -112,9 +139,10 @@ class FakeAccessibilityAPI:
 
             return kAXErrorSuccess, value
 
-        # Handle specific attributes that might not be directly stored
-        if attribute == "AXRole":
-            return kAXErrorSuccess, element.xml_node.tag
+        # If attribute is not in XML, treat as empty string for certain attributes
+        # that typically default to empty strings rather than being missing
+        if attribute in {"AXTitle", "AXDescription", "AXValue"}:
+            return kAXErrorSuccess, ""
 
         # Attribute not found
         return kAXErrorAttributeUnsupported, None
@@ -166,33 +194,43 @@ class FakeAccessibilityAPI:
             return self.root_elements[0]
 
         # Create a dummy element if no root elements
-        dummy_xml = ET.Element("AXApplication", {"id": "dummy"})
+        dummy_xml = ET.Element("AXApplication")
         return AXUIElement("dummy", dummy_xml)
 
 
-# Singleton instance of the fake API
-_fake_api_instance: Optional[FakeAccessibilityAPI] = None
+# Thread-local storage for API instance and state
+_thread_local = threading.local()
 
 def get_fake_api() -> FakeAccessibilityAPI:
-    """Get the singleton instance of the fake API."""
-    global _fake_api_instance
-    if _fake_api_instance is None:
-        raise RuntimeError("Fake API not initialized. Call init_fake_api first.")
-    return _fake_api_instance
+    """Get the thread-local instance of the fake API.
+
+    Thread-safe using thread-local storage.
+    """
+    if not hasattr(_thread_local, "fake_api_instance") or _thread_local.fake_api_instance is None:
+        raise RuntimeError("Fake API not initialized for this thread. Call init_fake_api first.")
+    return _thread_local.fake_api_instance
 
 def init_fake_api(snapshot_path: str) -> FakeAccessibilityAPI:
-    """Initialize the fake API with a snapshot file."""
-    global _fake_api_instance
-    _fake_api_instance = FakeAccessibilityAPI(snapshot_path)
-    return _fake_api_instance
+    """Initialize the thread-local fake API with a snapshot file.
 
-# API selector that decides whether to use real or fake API
-_use_fake_api = False
+    Thread-safe using thread-local storage.
+    """
+    _thread_local.fake_api_instance = FakeAccessibilityAPI(snapshot_path)
+    return _thread_local.fake_api_instance
+
+def is_using_fake_api() -> bool:
+    """Check if we're using fake APIs for testing.
+
+    Thread-safe using thread-local storage.
+    """
+    return getattr(_thread_local, "use_fake_api", False)
 
 def use_fake_api(snapshot_path: Optional[str] = None) -> None:
-    """Switch to using the fake API."""
-    global _use_fake_api
-    _use_fake_api = True
+    """Switch to using the fake API.
+
+    Thread-safe using thread-local storage.
+    """
+    _thread_local.use_fake_api = True
 
     if snapshot_path:
         init_fake_api(snapshot_path)
@@ -216,9 +254,11 @@ def use_fake_api(snapshot_path: Optional[str] = None) -> None:
         HIServices.AXUIElementPerformAction = fake_api.AXUIElementPerformAction
 
 def use_real_api() -> None:
-    """Switch back to using the real API."""
-    global _use_fake_api
-    _use_fake_api = False
+    """Switch back to using the real API.
+
+    Thread-safe using thread-local storage.
+    """
+    _thread_local.use_fake_api = False
 
     # We'd need to restore the original functions here
     # But for simplicity, we'll rely on module reloading to restore them

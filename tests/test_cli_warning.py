@@ -8,9 +8,6 @@ import os
 import logging
 import time
 
-# Add the parent directory to the Python path so we can import refined_claude modules
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-
 from refined_claude.logging import init_logging
 
 def main():

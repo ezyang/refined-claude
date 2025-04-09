@@ -66,7 +66,12 @@ uv tool install . --reinstall
 To run the tests:
 
 ```bash
-python -m unittest discover tests
+# Using pytest
+pip install pytest pytest-xdist
+pytest
+
+# Or using the provided test command
+test
 ```
 
 #### Testing with Fake Accessibility APIs

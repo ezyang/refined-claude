@@ -13,6 +13,7 @@ import re
 import select
 import sys
 import os
+import threading
 from typing import NamedTuple, List, Optional, Dict, Any
 from collections import defaultdict
 from dataclasses import dataclass
@@ -29,17 +30,22 @@ from rich.markup import escape
 not_set = object()
 log = logging.getLogger(__name__)
 
-# Global flag to determine if we're using fake APIs for testing
-_using_fake_apis = False
+# Thread-local storage for API mode flag
+_thread_local = threading.local()
 
 def is_using_fake_apis() -> bool:
-    """Check if we're using fake APIs for testing."""
-    return _using_fake_apis
+    """Check if we're using fake APIs for testing.
+
+    Thread-safe using thread-local storage.
+    """
+    return getattr(_thread_local, "using_fake_apis", False)
 
 def set_using_fake_apis(using_fake: bool = True) -> None:
-    """Set whether we're using fake APIs for testing."""
-    global _using_fake_apis
-    _using_fake_apis = using_fake
+    """Set whether we're using fake APIs for testing.
+
+    Thread-safe using thread-local storage.
+    """
+    _thread_local.using_fake_apis = using_fake
 
 
 class ContinueHistory(NamedTuple):
@@ -387,15 +393,6 @@ class HAX:
             for k in c.dom_class_list:
                 ret[k].append(c)
         return ret
-
-    @property
-    def ypos(self):
-        pos = str(self._get("AXPosition", ""))
-        if "y:" in pos:
-            y_part = pos.split("y:")[1].split()[0]
-            return float(y_part)
-        else:
-            return 0.0
 
     @property
     def url(self):

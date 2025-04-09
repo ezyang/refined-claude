@@ -28,14 +28,13 @@ ATTRIBUTES_TO_CAPTURE = {
     "AXDOMClassList",
     "AXDOMIdentifier",
     "AXURL",
-    "AXPosition",
 }
 
 def create_element_xml(element: HAX, element_id: int) -> ET.Element:
     """Convert a HAX element to an XML element with attributes."""
     # Create XML element with the role as the tag name
     role = element.role or "Unknown"
-    xml_element = ET.Element(role, {"id": str(element_id)})
+    xml_element = ET.Element(role)  # No longer adding id attribute
 
     # Add attributes used in our application
     attribute_names = element._dir()
@@ -48,10 +47,23 @@ def create_element_xml(element: HAX, element_id: int) -> ET.Element:
         if value is None:
             continue
 
+        # Skip empty string values
+        if isinstance(value, str) and value == "":
+            continue
+
         # Convert various types to string representation suitable for XML
-        if attr_name == "AXDOMClassList" and isinstance(value, list):
+        if attr_name == "AXDOMClassList":
+            # Convert all elements to strings
+            class_list = [str(cls) for cls in value]
+
+            # Validate that no class contains spaces (which would break the format)
+            for class_name in class_list:
+                if ' ' in class_name:
+                    log.warning(f"Class '{class_name}' contains spaces, which may cause parsing issues")
+                    assert ' ' not in class_name, f"Class name '{class_name}' contains spaces"
+
             # Join classes with spaces as typically done in HTML/CSS
-            xml_element.set(attr_name, " ".join(value))
+            xml_element.set(attr_name, " ".join(class_list))
         elif isinstance(value, (str, int, float, bool)):
             # Basic types can be converted directly to strings
             xml_element.set(attr_name, str(value))
@@ -69,7 +81,7 @@ def traverse_accessibility_tree(element: HAX, parent_xml: ET.Element, element_id
     if element is None:
         return
 
-    # Generate a unique ID for this element
+    # Generate a unique ID for this element (for internal tracking only)
     element_id = element_id_counter["next"]
     element_id_counter["next"] += 1
 

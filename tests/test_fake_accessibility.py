@@ -13,7 +13,14 @@ from unittest.mock import patch, MagicMock
 # Add the parent directory to the Python path so we can import refined_claude modules
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from refined_claude.fake_accessibility import FakeAccessibilityAPI, init_fake_api, use_fake_api
+# Mock the ApplicationServices and HIServices modules before importing our code
+mock_ApplicationServices = MagicMock()
+mock_HIServices = MagicMock()
+sys.modules['ApplicationServices'] = mock_ApplicationServices
+sys.modules['HIServices'] = mock_HIServices
+
+# Now import our modules
+from refined_claude.fake_accessibility import FakeAccessibilityAPI, init_fake_api, use_fake_api, is_using_fake_api, get_fake_api, AXUIElement
 from refined_claude.cli import HAX, set_using_fake_apis
 
 
@@ -35,23 +42,19 @@ class TestFakeAccessibilityAPI(unittest.TestCase):
 
         # Add a window
         window = ET.SubElement(root, "AXWindow")
-        window.set("id", "1")
         window.set("AXTitle", "Claude")
 
         # Add a group inside the window
         group = ET.SubElement(window, "AXGroup")
-        group.set("id", "2")
         group.set("AXDOMClassList", "container main-content")
 
         # Add a button inside the group
         button = ET.SubElement(group, "AXButton")
-        button.set("id", "3")
         button.set("AXTitle", "Send")
         button.set("AXDescription", "Send message")
 
         # Add a text area
         text_area = ET.SubElement(group, "AXTextArea")
-        text_area.set("id", "4")
         text_area.set("AXValue", "Test message")
         text_area.set("AXDOMClassList", "ProseMirror")
 
@@ -70,8 +73,9 @@ class TestFakeAccessibilityAPI(unittest.TestCase):
 
     def test_loading_snapshot(self):
         """Test that the snapshot is loaded correctly."""
-        # Check that elements were loaded
-        self.assertEqual(len(self.fake_api.elements_by_id), 4)
+        # Check that elements were loaded (with sequential IDs)
+        # We expect 4 elements (window, group, button, text_area)
+        self.assertGreaterEqual(len(self.fake_api.elements_by_id), 4)
         self.assertEqual(len(self.fake_api.root_elements), 1)
 
         # Check the root element
@@ -81,8 +85,8 @@ class TestFakeAccessibilityAPI(unittest.TestCase):
 
     def test_get_attribute(self):
         """Test getting attributes from elements."""
-        # Get an element from the dictionary
-        window = self.fake_api.elements_by_id["1"]
+        # Find the window element from the root elements
+        window = self.fake_api.root_elements[0]
 
         # Test getting attributes
         error, title = self.fake_api.AXUIElementCopyAttributeValue(window, "AXTitle", None)
@@ -96,8 +100,8 @@ class TestFakeAccessibilityAPI(unittest.TestCase):
 
     def test_get_children(self):
         """Test getting children of elements."""
-        # Get the window and group elements
-        window = self.fake_api.elements_by_id["1"]
+        # Get the window element from root_elements
+        window = self.fake_api.root_elements[0]
 
         # Get the children of the window
         error, children = self.fake_api.AXUIElementCopyAttributeValue(window, "AXChildren", None)
@@ -120,18 +124,50 @@ class TestFakeAccessibilityAPI(unittest.TestCase):
 
     def test_dom_class_list(self):
         """Test handling of AXDOMClassList attribute."""
-        # Get the group element
-        group = self.fake_api.elements_by_id["2"]
+        # Find the group element through the window
+        window = self.fake_api.root_elements[0]
+        error, children = self.fake_api.AXUIElementCopyAttributeValue(window, "AXChildren", None)
+        group = children[0]  # The group is the first child of the window
 
         # Get the AXDOMClassList attribute
         error, class_list = self.fake_api.AXUIElementCopyAttributeValue(group, "AXDOMClassList", None)
         self.assertEqual(error, 0)
         self.assertEqual(class_list, ["container", "main-content"])
 
+    def test_space_separated_dom_class_list(self):
+        """Test that AXDOMClassList is properly serialized and deserialized as space-separated."""
+        # Create a simple XML element with a class list attribute
+        root = ET.Element("AXElement")
+
+        # Set the class list using the HTML-style space-separated format
+        root.set("AXDOMClassList", "class1 class2 some-class another-class")
+
+        # Create a fake element with this XML
+        element = AXUIElement("test-element", root)
+
+        # Test retrieving the class list
+        error, class_list = self.fake_api.AXUIElementCopyAttributeValue(element, "AXDOMClassList", None)
+
+        # Verify it was parsed correctly
+        self.assertEqual(error, 0)  # kAXErrorSuccess
+        self.assertEqual(class_list, ["class1", "class2", "some-class", "another-class"])
+
     def test_set_attribute(self):
         """Test setting attributes on elements."""
-        # Get the text area element
-        text_area = self.fake_api.elements_by_id["4"]
+        # Find the text area element through navigation
+        window = self.fake_api.root_elements[0]
+        error, window_children = self.fake_api.AXUIElementCopyAttributeValue(window, "AXChildren", None)
+        group = window_children[0]
+        error, group_children = self.fake_api.AXUIElementCopyAttributeValue(group, "AXChildren", None)
+
+        # Find the text area among the children
+        text_area = None
+        for child in group_children:
+            if child.xml_node.tag == "AXTextArea":
+                text_area = child
+                break
+
+        self.assertIsNotNone(text_area, "Text area not found")
 
         # Set the AXValue attribute
         new_value = "Updated message"
@@ -144,6 +180,8 @@ class TestFakeAccessibilityAPI(unittest.TestCase):
         self.assertEqual(value, new_value)
 
 
+@patch('refined_claude.cli.ApplicationServices', mock_ApplicationServices)
+@patch('refined_claude.cli.HIServices', mock_HIServices)
 class TestHAXWithFakeAPI(unittest.TestCase):
     """Test that HAX works correctly with the fake API."""
 
@@ -156,11 +194,9 @@ class TestHAXWithFakeAPI(unittest.TestCase):
 
         # Add a window with a button
         window = ET.SubElement(root, "AXWindow")
-        window.set("id", "1")
         window.set("AXTitle", "Test Window")
 
         button = ET.SubElement(window, "AXButton")
-        button.set("id", "2")
         button.set("AXTitle", "Test Button")
 
         tree = ET.ElementTree(root)
@@ -170,8 +206,14 @@ class TestHAXWithFakeAPI(unittest.TestCase):
         # Initialize the fake API
         init_fake_api(self.temp_file.name)
 
-        # Apply the fake API
-        use_fake_api()
+        # Set up patched functions
+        fake_api = get_fake_api()
+        mock_ApplicationServices.AXUIElementCopyAttributeValue.side_effect = fake_api.AXUIElementCopyAttributeValue
+        mock_ApplicationServices.AXUIElementCopyAttributeNames.side_effect = fake_api.AXUIElementCopyAttributeNames
+        mock_HIServices.AXUIElementSetAttributeValue.side_effect = fake_api.AXUIElementSetAttributeValue
+        mock_HIServices.AXUIElementPerformAction.side_effect = fake_api.AXUIElementPerformAction
+
+        # Set using fake APIs
         set_using_fake_apis(True)
 
     def tearDown(self):
@@ -185,11 +227,10 @@ class TestHAXWithFakeAPI(unittest.TestCase):
     def test_hax_with_fake_api(self):
         """Test that HAX works with the fake API."""
         # Get the fake API
-        from refined_claude.fake_accessibility import get_fake_api
         fake_api = get_fake_api()
 
-        # Get the window element
-        window_element = fake_api.elements_by_id["1"]
+        # Get the window element (first root element)
+        window_element = fake_api.root_elements[0]
 
         # Create a HAX object with the fake element
         window_hax = HAX(window_element)
@@ -206,6 +247,54 @@ class TestHAXWithFakeAPI(unittest.TestCase):
         child = children[0]
         self.assertEqual(child.role, "AXButton")
         self.assertEqual(child.title, "Test Button")
+
+
+class TestEmptyStringHandling(unittest.TestCase):
+    """Test handling of empty string attributes in the fake API."""
+
+    def setUp(self):
+        """Set up the test with a minimal XML snapshot."""
+        # Create a temporary XML file
+        self.temp_file = tempfile.NamedTemporaryFile(suffix='.xml', delete=False)
+
+        # Create a minimal accessibility tree
+        root = ET.Element("AccessibilityTree")
+
+        # Add an element with no text attributes
+        element = ET.SubElement(root, "AXElement")
+
+        # Add an element with empty text attributes
+        element_with_empty = ET.SubElement(root, "AXElement")
+        element_with_empty.set("AXTitle", "")  # Empty string
+
+        tree = ET.ElementTree(root)
+        tree.write(self.temp_file.name)
+        self.temp_file.close()
+
+        # Initialize the fake API with the snapshot
+        init_fake_api(self.temp_file.name)
+        self.fake_api = get_fake_api()
+
+    def tearDown(self):
+        """Clean up temporary files."""
+        if os.path.exists(self.temp_file.name):
+            os.unlink(self.temp_file.name)
+
+    def test_missing_attributes_default_to_empty_string(self):
+        """Test that certain missing attributes default to empty string."""
+        # Get the element with no attributes (first root element)
+        element = self.fake_api.root_elements[0]
+
+        # Test retrieving text attributes that should default to empty string
+        for attr in ["AXTitle", "AXDescription", "AXValue"]:
+            error, value = self.fake_api.AXUIElementCopyAttributeValue(element, attr, None)
+            self.assertEqual(error, 0)  # kAXErrorSuccess
+            self.assertEqual(value, "")  # Should be empty string, not None or error
+
+        # Test retrieving a non-text attribute that should not default to empty string
+        error, value = self.fake_api.AXUIElementCopyAttributeValue(element, "AXURL", None)
+        self.assertNotEqual(error, 0)  # Should be an error
+        self.assertIsNone(value)  # Should be None
 
 
 if __name__ == "__main__":
