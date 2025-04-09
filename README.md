@@ -12,6 +12,7 @@ Accessibility refinements to Claude Desktop.  OS X only.
 - **Auto continue.** Automatically continue chats when they hit the reply
   size limit.
 - **Once-only warnings.** Warning messages are only shown once per file location to reduce log noise.
+- **Snapshot accessibility tree.** Create a snapshot of the Claude application's accessibility tree for testing purposes.
 
 ## Installation
 
@@ -27,10 +28,28 @@ You will need to give Terminal permissions for Accessibility, if you haven't alr
 
 With a running instance of Claude Desktop, just run this in the background:
 ```bash
-refined-claude
+refined-claude run
 ```
 
 You can disable various features using ``--no-auto-approve`` or ``--no-auto-continue``. Use ``--no-default-features`` to disable all features by default (you can then selectively enable specific features as needed).
+
+### Creating Accessibility Snapshots
+
+To create a snapshot of the Claude application's accessibility tree for testing:
+
+```bash
+refined-claude snapshot --output snapshot.xml
+```
+
+### Running in Test Mode
+
+You can run the application in test mode using a previously created snapshot:
+
+```bash
+refined-claude run --test-mode snapshot.xml
+```
+
+This allows testing the application without requiring the real Claude application to be running.
 
 ## Development
 
@@ -41,6 +60,23 @@ git clone https://github.com/ezyang/refined-claude.git
 cd refined-claude
 uv tool install . --reinstall
 ```
+
+### Testing
+
+To run the tests:
+
+```bash
+python -m unittest discover tests
+```
+
+#### Testing with Fake Accessibility APIs
+
+The application includes a testing infrastructure that allows you to test functionality without requiring the real Claude application to be running. It works by:
+
+1. Creating a snapshot of the Claude application's accessibility tree using the `snapshot` command
+2. Using this snapshot with a fake implementation of the Accessibility APIs
+
+To create a test that uses this infrastructure, see the example in `tests/test_fake_accessibility.py`.
 
 ## Troubleshooting
 

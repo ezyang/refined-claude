@@ -29,6 +29,18 @@ from rich.markup import escape
 not_set = object()
 log = logging.getLogger(__name__)
 
+# Global flag to determine if we're using fake APIs for testing
+_using_fake_apis = False
+
+def is_using_fake_apis() -> bool:
+    """Check if we're using fake APIs for testing."""
+    return _using_fake_apis
+
+def set_using_fake_apis(using_fake: bool = True) -> None:
+    """Set whether we're using fake APIs for testing."""
+    global _using_fake_apis
+    _using_fake_apis = using_fake
+
 
 class ContinueHistory(NamedTuple):
     url: str
@@ -243,6 +255,11 @@ def ax_dump_attrs(hax):
 
 
 def ax_attr(element, attribute, default=not_set):
+    """Get an accessibility attribute from an element.
+
+    This function works with both real and fake APIs. When using fake APIs,
+    it will use the fake implementation of AXUIElementCopyAttributeValue.
+    """
     error, value = ApplicationServices.AXUIElementCopyAttributeValue(
         element, attribute, None
     )
@@ -1026,7 +1043,13 @@ def run_snapshot_history(content_element, output_file=None):
                 log.error("Failed to save snapshot: %s", e)
 
 
-@click.command()
+@click.group()
+def cli():
+    """Refined Claude - Improvements for Claude Desktop"""
+    pass
+
+
+@cli.command()
 @click.option(
     "--auto-approve/--no-auto-approve",
     default=None,
@@ -1092,7 +1115,13 @@ def run_snapshot_history(content_element, output_file=None):
     default=True,
     help="Use default values for features when not explicitly specified",
 )
-def cli(
+@click.option(
+    "--test-mode",
+    type=click.Path(exists=True),
+    default=None,
+    help="Run in test mode using a fake accessibility API with the specified snapshot file",
+)
+def run(
     auto_approve: bool | None,
     only_auto_approve: bool,
     auto_continue: bool | None,
@@ -1105,8 +1134,17 @@ def cli(
     once: bool,
     default_features: bool,
     verbose: bool,
+    test_mode: str | None,
 ):
     init_logging(verbose)
+
+    # Check if we're in test mode and set up the fake API if needed
+    if test_mode:
+        log.info(f"Running in test mode using snapshot: {test_mode}")
+        from .fake_accessibility import init_fake_api, use_fake_api
+        init_fake_api(test_mode)
+        use_fake_api()
+        set_using_fake_apis(True)
 
     # If --only-snapshot-history is provided, use that path for snapshot_history
     if only_snapshot_history is not None:
@@ -1262,3 +1300,8 @@ def cli(
 
             if once:
                 return
+
+
+# Add the snapshot command as a subcommand of 'cli'
+from .snapshot import snapshot_command
+cli.add_command(snapshot_command, name="snapshot")
