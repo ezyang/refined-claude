@@ -56,6 +56,9 @@ def create_element_xml(element: HAX, element_id: int) -> ET.Element:
             # Convert all elements to strings
             class_list = [str(cls) for cls in value]
 
+            if not class_list:
+                continue
+
             # Validate that no class contains spaces (which would break the format)
             for class_name in class_list:
                 if ' ' in class_name:
