@@ -3,8 +3,7 @@ from __future__ import annotations
 import os
 import logging
 import xml.etree.ElementTree as ET
-from typing import Dict, Any, Optional, List, Set, Tuple, Callable
-from typing_extensions import Protocol
+from typing import Dict, Any, Optional, List, Set, Tuple, Callable, Protocol
 
 log = logging.getLogger(__name__)
 
