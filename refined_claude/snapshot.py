@@ -21,7 +21,6 @@ log = logging.getLogger(__name__)
 # Define which attributes we want to capture in our snapshot
 # These should cover all attributes used in the application
 ATTRIBUTES_TO_CAPTURE = {
-    "AXRole",
     "AXValue",
     "AXTitle",
     "AXDescription",
