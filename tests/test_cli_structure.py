@@ -62,6 +62,16 @@ class TestCLIStructure(unittest.TestCase):
         self.assertIn("--output", result.output)
         self.assertIn("-o", result.output)
 
+    @patch('refined_claude.cli.run')
+    def test_default_to_run_command(self, mock_run):
+        """Test that the CLI defaults to the 'run' command when no subcommand is specified."""
+        # Call CLI without specifying a subcommand
+        result = self.runner.invoke(cli, [])
+
+        # Verify that the run command was invoked
+        self.assertEqual(result.exit_code, 0)
+        mock_run.assert_called_once()
+
 
 if __name__ == "__main__":
     unittest.main()

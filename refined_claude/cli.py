@@ -1040,10 +1040,13 @@ def run_snapshot_history(content_element, output_file=None):
                 log.error("Failed to save snapshot: %s", e)
 
 
-@click.group()
-def cli():
+@click.group(invoke_without_command=True)
+@click.pass_context
+def cli(ctx):
     """Refined Claude - Improvements for Claude Desktop"""
-    pass
+    if ctx.invoked_subcommand is None:
+        # If no subcommand is specified, run the 'run' command with default arguments
+        ctx.invoke(run)
 
 
 @cli.command()

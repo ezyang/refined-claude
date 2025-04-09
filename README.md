@@ -28,8 +28,14 @@ You will need to give Terminal permissions for Accessibility, if you haven't alr
 
 With a running instance of Claude Desktop, just run this in the background:
 ```bash
+refined-claude
+```
+Or explicitly with the run subcommand:
+```bash
 refined-claude run
 ```
+
+The CLI defaults to the 'run' command when no subcommand is specified.
 
 You can disable various features using ``--no-auto-approve`` or ``--no-auto-continue``. Use ``--no-default-features`` to disable all features by default (you can then selectively enable specific features as needed).
 
