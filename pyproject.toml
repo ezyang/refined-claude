@@ -25,6 +25,7 @@ build-backend = "hatchling.build"
 [dependency-groups]
 dev = [
     "pytest>=7.0.0",
+    "pytest-xdist>=3.6.1",
     "ruff>=0.11.0",
 ]
 
@@ -36,3 +37,6 @@ CI = "https://github.com/ezyang/refined-claude/actions"
 
 [project.scripts]
 refined-claude = "refined_claude.cli:cli"
+
+[tool.pytest.ini_options]
+addopts = "-n auto --tb=native"

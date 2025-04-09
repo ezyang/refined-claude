@@ -1,0 +1,3 @@
+[commands.test]
+command = ["uv", "run", "pytest"]
+doc = "Accepts a pytest-style test selector as an argument to run a specific test."
