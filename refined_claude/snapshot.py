@@ -14,7 +14,7 @@ import xml.dom.minidom
 from typing import Dict, Any, Optional, Set, List
 from contextlib import contextmanager
 
-from .cli import HAX, ax_attr
+from .accessibility import HAX, ax_attr
 
 log = logging.getLogger(__name__)
 

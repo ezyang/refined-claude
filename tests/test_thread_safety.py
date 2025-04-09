@@ -20,7 +20,7 @@ sys.modules['HIServices'] = mock_HIServices
 
 # Now import our modules
 from refined_claude.fake_accessibility import init_fake_api, use_fake_api, is_using_fake_api
-from refined_claude.cli import set_using_fake_apis, is_using_fake_apis
+from refined_claude.accessibility import set_using_fake_apis, is_using_fake_apis
 
 
 class TestThreadSafety(unittest.TestCase):

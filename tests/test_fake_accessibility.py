@@ -21,7 +21,7 @@ sys.modules['HIServices'] = mock_HIServices
 
 # Now import our modules
 from refined_claude.fake_accessibility import FakeAccessibilityAPI, init_fake_api, use_fake_api, is_using_fake_api, get_fake_api, AXUIElement
-from refined_claude.cli import HAX, set_using_fake_apis
+from refined_claude.accessibility import HAX, set_using_fake_apis
 
 
 class TestFakeAccessibilityAPI(unittest.TestCase):
@@ -180,8 +180,8 @@ class TestFakeAccessibilityAPI(unittest.TestCase):
         self.assertEqual(value, new_value)
 
 
-@patch('refined_claude.cli.ApplicationServices', mock_ApplicationServices)
-@patch('refined_claude.cli.HIServices', mock_HIServices)
+@patch('refined_claude.accessibility.ApplicationServices', mock_ApplicationServices)
+@patch('refined_claude.accessibility.HIServices', mock_HIServices)
 class TestHAXWithFakeAPI(unittest.TestCase):
     """Test that HAX works correctly with the fake API."""
 
