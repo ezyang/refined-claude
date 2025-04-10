@@ -97,8 +97,8 @@ def run_auto_approve(web_view, dry_run):
     current_time = time.time()
     elapsed_time = (current_time - _last_allow_button_press_time) * 1000  # Convert to milliseconds
 
-    if elapsed_time < 100:  # 100ms back-off period
-        log.info("Skipping button press, too soon after previous press (%.2f ms elapsed)", elapsed_time)
+    if elapsed_time < 1000:  # 1s back-off period
+        log.debug("Skipping button press, too soon after previous press (%.2f ms elapsed)", elapsed_time)
         return
 
     # Update the last button press time and press the button
