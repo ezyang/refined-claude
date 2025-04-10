@@ -67,6 +67,8 @@ class SpinnerURLView:
         # Add new fields to track iteration times
         self.last_iteration_timestamps = [time.time() for _ in windows]
         self.iteration_times = [0 for _ in windows]
+        # Add field to track chat running state
+        self.running_states = [False for _ in windows]
 
     def update_url(self, index: int, url: str):
         self.urls[index] = url if url else "Not a Claude chat"
@@ -96,6 +98,15 @@ class SpinnerURLView:
             self.segment_times = [{}] * len(self.windows)
         self.segment_times[index] = segment_times
 
+    def update_running_state(self, index: int, running: bool):
+        """Update the running state for the specified window.
+
+        Args:
+            index: Window index
+            running: True if the chat is running, False otherwise
+        """
+        self.running_states[index] = running
+
     def toggle_pause(self):
         """Toggle the paused state"""
         self.paused = not self.paused
@@ -123,9 +134,15 @@ class SpinnerURLView:
             line = Text()
             # If paused, don't animate the spinner
             if self.paused:
-                line.append("○")  # Static circle instead of spinner when paused
-            else:
+                line.append("○")  # Static empty circle when paused
+            # If chat is running, show animated spinner and green indicator
+            elif self.running_states[i]:
                 line.append(spinner.render(current_time))
+                line.append(Text(" ⟳", style="bold green"))  # Green indicator when running
+            # If chat is not running, show static character
+            else:
+                line.append("•")  # Static dot when chat is not running
+                line.append(Text(" ■", style="dim"))  # Dim square when stopped
             line.append(" ")
 
             # Style URL with appropriate color and underlining

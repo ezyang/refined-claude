@@ -19,6 +19,7 @@ from .features import (
     run_auto_continue,
     run_notify_on_complete,
     run_snapshot_history,
+    check_chat_running_state,
     ContinueHistory
 )
 
@@ -261,6 +262,22 @@ def run(
                     with TimingSegment(segment_times, 'M'):
                         message_count, last_assistant_length = get_message_stats(content_element)
                         view.update_message_stats(i, message_count, last_assistant_length)
+
+                    # Check for running state (even if notify_on_complete is disabled)
+                    with TimingSegment(segment_times, 'R'):
+                        # Check if the chat is running
+                        is_running = check_chat_running_state(content_element)
+
+                        # Update running state
+                        if running[i] and not is_running:
+                            running[i] = False
+                            log.debug("Chat is no longer running")
+                        elif not running[i] and is_running:
+                            running[i] = True
+                            log.debug("Chat is now running")
+
+                        # Update running state in the UI view
+                        view.update_running_state(i, running[i])
 
                     # Segment N: Notify on complete
                     if notify_on_complete:

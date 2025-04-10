@@ -234,52 +234,63 @@ def run_auto_continue(web_view, dry_run, continue_history, index, content_elemen
     log.info("Auto-continue triggered!")
 
 
-def run_notify_on_complete(web_view, running: list[int], i: int, content_element):
-    """Find the Stop Response button and track chat completion state.
-
-    This optimized version uses a targeted traversal approach to find the
-    Stop Response button at the expected position in the UI hierarchy.
+def check_chat_running_state(content_element):
+    """Find the Stop Response button to determine if a chat is running.
 
     Args:
-        web_view: The web view element
-        running: List tracking the running state of each window
-        i: The index of the current window
-        content_element: Pre-found chat content element (optional)
+        content_element: The chat content element
+
+    Returns:
+        bool: True if the Stop Response button is found (chat is running),
+              False otherwise (chat is not running)
     """
-    # Use the provided content_element if available, otherwise don't check for stop button
     stop_button = None
 
-    # Look for sticky footer by class rather than position
+    # Look for sticky footer by class
     sticky_footer = None
     for child in content_element.children:
         match child:
-            case HAX(role="AXGroup", dom_class_list={"sticky": True, "bottom-0": True}):
+            case HAX(role="AXGroup", dom_class_list=classes) if "sticky" in classes and "bottom-0" in classes:
                 sticky_footer = child
                 log.debug("Found sticky footer area by class")
                 break
 
     if not sticky_footer:
-        return
+        return False
 
     # Match first child as input container
     match sticky_footer.children:
         case [HAX(role="AXGroup") as input_container, *_]:
-
             if input_container.children:
                 # Match first child as button container
                 match input_container.children[0]:
                     case HAX(role="AXGroup") as button_container:
-
                         # Look for Stop Response button among the button container's children
                         for button in button_container.children:
                             match button:
                                 case HAX(role="AXButton", description="Stop response"):
                                     stop_button = button
                                     log.debug("Found Stop Response button using targeted traversal")
-                                    break
+                                    return True
 
-    # Process the button state
-    if running[i] and not stop_button:
+    return False
+
+
+def run_notify_on_complete(web_view, running: list[int], i: int, content_element):
+    """Find the Stop Response button and track chat completion state.
+    Send notifications when the chat state changes.
+
+    Args:
+        web_view: The web view element
+        running: List tracking the running state of each window
+        i: The index of the current window
+        content_element: Pre-found chat content element
+    """
+    # Check if the chat is running
+    is_running = check_chat_running_state(content_element)
+
+    # Process the running state
+    if running[i] and not is_running:
         log.info("Detected chat response finished")
         running[i] = False
         subprocess.check_call(
@@ -289,7 +300,7 @@ def run_notify_on_complete(web_view, running: list[int], i: int, content_element
                 'display notification "Claude response finished" with title "Claude" sound name "Glass"',
             ]
         )
-    elif not running[i] and stop_button:
+    elif not running[i] and is_running:
         log.info("Detected chat response started")
         running[i] = True
 
