@@ -11,6 +11,10 @@ from .parsing import parse_content_element, format_messages
 log = logging.getLogger(__name__)
 
 
+# Track the last button press time for the "Allow for this chat" button
+_last_allow_button_press_time = 0.0
+
+
 class ContinueHistory(NamedTuple):
     url: str
     watermark: int
@@ -45,7 +49,10 @@ def run_auto_approve(web_view, dry_run):
 
     This optimized version uses a targeted traversal approach to find the tool approval dialog,
     then uses a limited findall only within that dialog to locate the button.
+    Includes a back-off mechanism to prevent pressing the button too frequently.
     """
+    global _last_allow_button_press_time
+
     # First, look for the dialog by using pattern matching on the parent elements
     # This is more efficient than using findall on the entire tree
     dialog = None
@@ -80,9 +87,22 @@ def run_auto_approve(web_view, dry_run):
 
     button = buttons[0]
     log.info("Found 'Allow for this chat' button using optimized search")
+
+    # Check if we're in dry-run mode
     if dry_run:
         log.info("Stopping now because of --dry-run")
         return
+
+    # Check if enough time has elapsed since the last button press
+    current_time = time.time()
+    elapsed_time = (current_time - _last_allow_button_press_time) * 1000  # Convert to milliseconds
+
+    if elapsed_time < 100:  # 100ms back-off period
+        log.info("Skipping button press, too soon after previous press (%.2f ms elapsed)", elapsed_time)
+        return
+
+    # Update the last button press time and press the button
+    _last_allow_button_press_time = current_time
     button.press()
     log.info("Pressed button")
 
