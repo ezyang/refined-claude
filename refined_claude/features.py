@@ -215,6 +215,7 @@ def run_auto_continue(web_view, dry_run, continue_history, index, content_elemen
         log.info("But textbox already has contents '%s', aborting", contents)
         return
     textarea.value = "Continue"
+    time.sleep(0.1)  # wait for textarea contents to propagate.  TODO: tune
 
     # Look for send button in the sticky footer
     # This approach is similar to how run_notify_on_complete finds buttons
