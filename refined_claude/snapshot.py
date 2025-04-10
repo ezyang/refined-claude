@@ -12,8 +12,7 @@ import xml.dom.minidom
 from typing import Dict, Any, Optional, Set, List
 from contextlib import contextmanager
 
-from .accessibility import HAX, ax_attr
-from .accessibility_api import get_api
+from .accessibility import HAX
 
 log = logging.getLogger(__name__)
 
@@ -128,10 +127,9 @@ def pretty_print_xml(element: ET.Element) -> str:
 
 def find_claude_app() -> Optional[HAX]:
     """Find the Claude application if it's running."""
-    api = get_api()
     apps = AppKit.NSWorkspace.sharedWorkspace().runningApplications()
     claude_apps = [
-        HAX(api.AXUIElementCreateApplication(app.processIdentifier()))
+        HAX(app.processIdentifier())
         for app in apps
         if app.localizedName() == "Claude"
     ]

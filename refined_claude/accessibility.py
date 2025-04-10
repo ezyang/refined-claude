@@ -15,27 +15,28 @@ from .accessibility_api import (
 log = logging.getLogger(__name__)
 
 
-def ax_attr(element, attribute, default=not_set):
-    """Get an accessibility attribute from an element.
-
-    This function works with both real and fake APIs, using the current API implementation.
-    """
-    api = get_api()
-    error, value = api.AXUIElementCopyAttributeValue(element, attribute, None)
-    if error:
-        if default is not not_set:
-            return default
-        raise ValueError(f"Error getting attribute {attribute}: {error}")
-    return value
-
 
 class HAX:
-    def __init__(self, elem, api=None):
-        self.elem = elem  # underlying accessibility element
+    def __init__(self, elem_or_pid, api=None):
         self.api = api or get_api()  # Store the API reference
 
+        # Handle the case where elem_or_pid is a process ID
+        if isinstance(elem_or_pid, int):
+            self.elem = self.api.AXUIElementCreateApplication(elem_or_pid)
+        else:
+            self.elem = elem_or_pid  # underlying accessibility element
+
     def _get(self, name, default=not_set):
-        return ax_attr(self.elem, name, default)
+        """Get an accessibility attribute from an element.
+
+        This method works with both real and fake APIs, using the current API implementation.
+        """
+        error, value = self.api.AXUIElementCopyAttributeValue(self.elem, name, None)
+        if error:
+            if default is not not_set:
+                return default
+            raise ValueError(f"Error getting attribute {name}: {error}")
+        return value
 
     def _dir(self):
         """Get all attribute names for this element."""
