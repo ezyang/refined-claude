@@ -189,7 +189,7 @@ def run(
     api = get_api()
     apps = AppKit.NSWorkspace.sharedWorkspace().runningApplications()
     claude_apps = [
-        HAX(api.AXUIElementCreateApplication(app.processIdentifier()))
+        HAX(api.AXUIElementCreateApplication(app.processIdentifier()), api)
         for app in apps
         if app.localizedName() == "Claude"
     ]

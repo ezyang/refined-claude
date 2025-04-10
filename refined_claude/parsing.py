@@ -123,9 +123,16 @@ def parse_content_element(content_element):
             case HAX(dom_class_list={"sticky": True}):
                 continue
 
+            case HAX(dom_class_list={"h-full": True}):
+                continue
+
+            case HAX(role=""):
+                log.debug("skipping no-role element %s", i)
+                continue
+
             # Unrecognized message
             case _:
-                log.warning("unrecognized message %s", message.repr(2))
+                log.warning("unrecognized message '%s' %s", message.role, message.repr(2))
                 parsed_messages.append(
                     MessageInfo(
                         type="unknown",

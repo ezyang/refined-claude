@@ -17,8 +17,8 @@ log = logging.getLogger(__name__)
 
 
 class HAX:
-    def __init__(self, elem_or_pid, api=None):
-        self.api = api or get_api()  # Store the API reference
+    def __init__(self, elem_or_pid, api):
+        self.api = api  # Store the API reference
 
         # Handle the case where elem_or_pid is a process ID
         if isinstance(elem_or_pid, int):

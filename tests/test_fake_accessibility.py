@@ -221,7 +221,7 @@ class TestHAXWithFakeAPI(unittest.TestCase):
         window_element = self.fake_api.root_elements[0]
 
         # Create a HAX object with the fake element
-        window_hax = HAX(window_element)
+        window_hax = HAX(window_element, self.fake_api)
 
         # Test properties and methods
         self.assertEqual(window_hax.role, "AXWindow")

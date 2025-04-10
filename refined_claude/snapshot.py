@@ -127,9 +127,11 @@ def pretty_print_xml(element: ET.Element) -> str:
 
 def find_claude_app() -> Optional[HAX]:
     """Find the Claude application if it's running."""
+    from .accessibility_api import get_api
+    api = get_api()
     apps = AppKit.NSWorkspace.sharedWorkspace().runningApplications()
     claude_apps = [
-        HAX(app.processIdentifier())
+        HAX(app.processIdentifier(), api)
         for app in apps
         if app.localizedName() == "Claude"
     ]

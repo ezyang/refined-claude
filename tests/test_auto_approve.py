@@ -51,7 +51,7 @@ class TestAutoApprove(unittest.TestCase):
         # Get the root window element
         window = None
         for element in self.fake_api.root_elements:
-            window_hax = HAX(element)
+            window_hax = HAX(element, self.fake_api)
             if window_hax.role == "AXWindow" and window_hax.title == "Claude":
                 window = window_hax
                 break
@@ -126,8 +126,8 @@ class TestAutoApprove(unittest.TestCase):
             run_auto_approve(self.web_view, dry_run=False)
             self.assertEqual(button_pressed_count[0], 1, "Button should not be pressed again immediately")
 
-            # Advance the clock by 200ms (well beyond the 100ms back-off period)
-            mock_time_value[0] += 0.2
+            # Advance the clock by 1.1s (well beyond the 1s back-off period)
+            mock_time_value[0] += 1.1
 
             # After waiting, the button should be pressed again
             run_auto_approve(self.web_view, dry_run=False)

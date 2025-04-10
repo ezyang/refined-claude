@@ -261,13 +261,9 @@ def run_notify_on_complete(web_view, running: list[int], i: int, content_element
     if not sticky_footer:
         return
 
-    if not sticky_footer.children:
-        log.warning("Sticky footer has no children")
-        return
-
     # Match first child as input container
-    match sticky_footer.children[0]:
-        case HAX(role="AXGroup") as input_container:
+    match sticky_footer.children:
+        case [HAX(role="AXGroup") as input_container, *_]:
 
             if input_container.children:
                 # Match first child as button container
