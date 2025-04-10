@@ -36,6 +36,10 @@ def parse_content_element(content_element):
     for i, message in enumerate(messages):
         # Skip certain message types
         match message:
+            case HAX(role=""):
+                log.debug("skipping no-role element %s", i)
+                continue
+
             case HAX(dom_class_list={"group/thumbnail": True}):
                 log.debug("skipping thumbnail at %s", i)
                 continue
@@ -150,6 +154,8 @@ def parse_para(para):
         # Tool call button
         # TODO: this is the only place you can find out what tool was called
         ret.append(para.inner_text())
+    elif role == "":
+        log.debug("skipping no-role element %s", para.repr())
     else:
         log.warning("unrecognized %s, %s", role, para.repr())
         ret.append(para.inner_text())
