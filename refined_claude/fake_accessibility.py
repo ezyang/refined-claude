@@ -8,10 +8,6 @@ from typing import Dict, Any, Optional, List, Set, Tuple, Callable, TypeVar
 from .accessibility_api import (
     AccessibilityAPI,
     AccessibilityElement,
-    get_api,
-    set_api,
-    is_using_fake_api,
-    set_using_fake_api,
     kAXErrorSuccess,
     kAXErrorNoValue,
     kAXErrorAttributeUnsupported
@@ -205,31 +201,7 @@ class FakeAccessibilityAPI(AccessibilityAPI):
         return AXUIElement("dummy", dummy_xml)
 
 
-def get_fake_api() -> FakeAccessibilityAPI:
-    """Get the instance of the fake API."""
-    api = get_api()
-    if not isinstance(api, FakeAccessibilityAPI):
-        raise RuntimeError("Current API is not a FakeAccessibilityAPI. Call init_fake_api first.")
-    return api
-
-
 def init_fake_api(snapshot_path: str) -> FakeAccessibilityAPI:
-    """Initialize the fake API with a snapshot file."""
+    """Initialize a fake API with a snapshot file."""
     fake_api = FakeAccessibilityAPI(snapshot_path)
-    set_api(fake_api)
     return fake_api
-
-
-def use_fake_api(snapshot_path: Optional[str] = None) -> None:
-    """Switch to using the fake API."""
-    set_using_fake_api(True)
-
-    if snapshot_path:
-        init_fake_api(snapshot_path)
-
-
-def use_real_api() -> None:
-    """Switch back to using the real API."""
-    from .accessibility_api import RealAccessibilityAPI
-    set_using_fake_api(False)
-    set_api(RealAccessibilityAPI())

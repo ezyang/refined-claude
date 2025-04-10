@@ -23,8 +23,8 @@ sys.modules['ApplicationServices'] = mock_ApplicationServices
 sys.modules['HIServices'] = mock_HIServices
 
 # Now import our modules
-from refined_claude.fake_accessibility import init_fake_api, get_fake_api
-from refined_claude.accessibility_api import RealAccessibilityAPI, get_api, set_api
+from refined_claude.fake_accessibility import init_fake_api
+from refined_claude.accessibility_api import RealAccessibilityAPI
 
 
 class TestMultiThreadAccess(unittest.TestCase):
@@ -52,17 +52,13 @@ class TestMultiThreadAccess(unittest.TestCase):
         if os.path.exists(self.temp_file.name):
             os.unlink(self.temp_file.name)
 
-        # Reset to real API
-        set_api(RealAccessibilityAPI())
-
     def test_multi_thread_access(self):
         """Test that each thread can access the correct API implementation."""
         # In our new design, all threads share the same API implementation
         # So this test just verifies that multiple threads can access the API
 
         def thread_function(thread_id, results, lock):
-            # Get the API and verify it's the fake API
-            api = get_api()
+            api = self.fake_api
 
             # Verify we can access the root elements
             root_elements = getattr(api, 'root_elements', None)

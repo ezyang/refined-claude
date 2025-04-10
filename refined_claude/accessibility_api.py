@@ -13,10 +13,6 @@ not_set = object()
 
 log = logging.getLogger(__name__)
 
-# Global variable to hold the current API implementation
-_current_api = None
-_using_fake_api = False
-
 @runtime_checkable
 class AccessibilityElement(Protocol):
     """Protocol for elements in the accessibility tree."""
@@ -115,49 +111,3 @@ class RealAccessibilityAPI(AccessibilityAPI):
     def AXUIElementCreateApplication(self, pid: int) -> T:
         import ApplicationServices
         return ApplicationServices.AXUIElementCreateApplication(pid)
-
-
-def get_api() -> AccessibilityAPI:
-    """Get the current accessibility API implementation.
-
-    Returns:
-        The current accessibility API implementation.
-
-    Raises:
-        RuntimeError: If no API implementation has been set.
-    """
-    global _current_api
-    if _current_api is None:
-        # Default to the real API if not explicitly set
-        set_api(RealAccessibilityAPI())
-    return _current_api
-
-
-def set_api(api: AccessibilityAPI) -> None:
-    """Set the current accessibility API implementation.
-
-    Args:
-        api: The API implementation to use.
-    """
-    global _current_api
-    _current_api = api
-
-
-def is_using_fake_api() -> bool:
-    """Check if we're using a fake API implementation.
-
-    Returns:
-        True if a fake API is being used, False if using the real macOS APIs.
-    """
-    global _using_fake_api
-    return _using_fake_api
-
-
-def set_using_fake_api(value: bool = True) -> None:
-    """Set whether we're using a fake API implementation.
-
-    Args:
-        value: True to indicate that a fake API is being used.
-    """
-    global _using_fake_api
-    _using_fake_api = value

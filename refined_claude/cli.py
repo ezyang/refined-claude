@@ -10,7 +10,7 @@ from rich.live import Live
 from .logging import init_logging
 from .console import console
 from .accessibility import HAX, extract_web_view, get_chat_url, find_chat_content_element
-from .accessibility_api import get_api, set_using_fake_api as set_using_fake_apis
+from .accessibility_api import RealAccessibilityAPI
 from .ui import SpinnerURLView, check_for_enter_key
 from .parsing import get_message_stats
 from .features import (
@@ -124,12 +124,11 @@ def run(
     init_logging(verbose)
 
     # Check if we're in test mode and set up the fake API if needed
+    fake_api = None
     if test_mode:
         log.info(f"Running in test mode using snapshot: {test_mode}")
-        from .fake_accessibility import init_fake_api, use_fake_api
-        init_fake_api(test_mode)
-        use_fake_api()
-        set_using_fake_apis(True)
+        from .fake_accessibility import init_fake_api
+        fake_api = init_fake_api(test_mode)
 
     # If --only-snapshot-history is provided, use that path for snapshot_history
     if only_snapshot_history is not None:
@@ -186,7 +185,13 @@ def run(
 
     # NB: Claude is only queried at process start (maybe add an option to
     # requery every loop iteration
-    api = get_api()
+    if test_mode:
+        # We already set up the fake API earlier
+        api = fake_api  # This is defined from init_fake_api in the test_mode condition above
+    else:
+        # Create a real API instance
+        api = RealAccessibilityAPI()
+
     apps = AppKit.NSWorkspace.sharedWorkspace().runningApplications()
     claude_apps = [
         HAX(api.AXUIElementCreateApplication(app.processIdentifier()), api)

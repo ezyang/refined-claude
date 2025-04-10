@@ -20,9 +20,9 @@ sys.modules['ApplicationServices'] = mock_ApplicationServices
 sys.modules['HIServices'] = mock_HIServices
 
 # Now import our modules
-from refined_claude.fake_accessibility import FakeAccessibilityAPI, init_fake_api, use_fake_api, is_using_fake_api, get_fake_api, AXUIElement
+from refined_claude.fake_accessibility import FakeAccessibilityAPI, init_fake_api, AXUIElement
 from refined_claude.accessibility import HAX
-from refined_claude.accessibility_api import set_using_fake_api as set_using_fake_apis, get_api, set_api, RealAccessibilityAPI
+from refined_claude.accessibility_api import RealAccessibilityAPI
 
 
 class TestFakeAccessibilityAPI(unittest.TestCase):
@@ -202,18 +202,13 @@ class TestHAXWithFakeAPI(unittest.TestCase):
         tree.write(self.temp_file.name)
         self.temp_file.close()
 
-        # Create and set the fake API
+        # Create the fake API
         self.fake_api = init_fake_api(self.temp_file.name)
-        set_using_fake_apis(True)
 
     def tearDown(self):
-        """Clean up and reset the API."""
+        """Clean up and reset the API flag."""
         if os.path.exists(self.temp_file.name):
             os.unlink(self.temp_file.name)
-
-        # Reset to real API
-        set_using_fake_apis(False)
-        set_api(RealAccessibilityAPI())
 
     def test_hax_with_fake_api(self):
         """Test that HAX works with the fake API."""
@@ -267,8 +262,7 @@ class TestEmptyStringHandling(unittest.TestCase):
         if os.path.exists(self.temp_file.name):
             os.unlink(self.temp_file.name)
 
-        # Reset API to default
-        set_api(RealAccessibilityAPI())
+        # No need to reset the API as it's local to this test
 
     def test_missing_attributes_default_to_empty_string(self):
         """Test that certain missing attributes default to empty string."""

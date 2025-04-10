@@ -6,9 +6,6 @@ from typing import Any, List, Optional, Dict
 
 from .accessibility_api import (
     AccessibilityElement,
-    get_api,
-    is_using_fake_api as is_using_fake_apis,
-    set_using_fake_api as set_using_fake_apis,
     not_set
 )
 

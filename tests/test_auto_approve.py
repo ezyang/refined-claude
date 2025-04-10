@@ -22,7 +22,6 @@ sys.modules['HIServices'] = mock_HIServices
 # Import our modules
 from refined_claude.fake_accessibility import FakeAccessibilityAPI, init_fake_api
 from refined_claude.accessibility import HAX
-from refined_claude.accessibility_api import set_using_fake_api as set_using_fake_apis, set_api
 from refined_claude.features import run_auto_approve, _last_allow_button_press_time
 
 # Set up logging for debugging
@@ -45,8 +44,6 @@ class TestAutoApprove(unittest.TestCase):
 
         # Initialize the fake API with the XML dump
         self.fake_api = init_fake_api(xml_path)
-        set_using_fake_apis(True)
-        set_api(self.fake_api)
 
         # Get the root window element
         window = None
@@ -72,8 +69,7 @@ class TestAutoApprove(unittest.TestCase):
 
     def tearDown(self):
         """Clean up after the test."""
-        # Reset to real API
-        set_using_fake_apis(False)
+        pass
 
     def test_find_allow_button(self):
         """Test that the 'Allow for this chat' button is found correctly."""
