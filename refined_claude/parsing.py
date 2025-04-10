@@ -115,6 +115,14 @@ def parse_content_element(content_element):
                     )
                 )
 
+            # Some harmless things to skip, they tend to show up when you
+            # switch tabs, these might be the loading elements
+            case HAX(dom_class_list={"relative": True}):
+                continue
+
+            case HAX(dom_class_list={"sticky": True}):
+                continue
+
             # Unrecognized message
             case _:
                 log.warning("unrecognized message %s", message.repr(2))
