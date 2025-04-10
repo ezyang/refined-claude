@@ -85,20 +85,20 @@ def run_auto_approve(web_view, dry_run):
         log.warning("Button not found: %s", dialog.repr())
         return
 
-    button = buttons[0]
-    log.info("Found 'Allow for this chat' button using optimized search")
-
-    # Check if we're in dry-run mode
-    if dry_run:
-        log.info("Stopping now because of --dry-run")
-        return
-
     # Check if enough time has elapsed since the last button press
     current_time = time.time()
     elapsed_time = (current_time - _last_allow_button_press_time) * 1000  # Convert to milliseconds
 
     if elapsed_time < 1000:  # 1s back-off period
         log.debug("Skipping button press, too soon after previous press (%.2f ms elapsed)", elapsed_time)
+        return
+
+    button = buttons[0]
+    log.info("Found 'Allow for this chat' button using optimized search")
+
+    # Check if we're in dry-run mode
+    if dry_run:
+        log.info("Stopping now because of --dry-run")
         return
 
     # Update the last button press time and press the button
