@@ -13,6 +13,7 @@ from typing import Dict, Any, Optional, Set, List
 from contextlib import contextmanager
 
 from .accessibility import HAX
+from .accessibility_api import RealAccessibilityAPI
 
 log = logging.getLogger(__name__)
 
@@ -127,8 +128,7 @@ def pretty_print_xml(element: ET.Element) -> str:
 
 def find_claude_app() -> Optional[HAX]:
     """Find the Claude application if it's running."""
-    from .accessibility_api import get_api
-    api = get_api()
+    api = RealAccessibilityAPI()
     apps = AppKit.NSWorkspace.sharedWorkspace().runningApplications()
     claude_apps = [
         HAX(app.processIdentifier(), api)
