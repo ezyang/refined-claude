@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import logging
+import re
 import xml.etree.ElementTree as ET
 from typing import Dict, Any, Optional, List, Set, Tuple, Callable, TypeVar
 
@@ -14,6 +15,35 @@ from .accessibility_api import (
 )
 
 log = logging.getLogger(__name__)
+
+# Mapping for recognized escape sequences.
+_escape_dict = {
+    'n': '\n',
+    'r': '\r',
+    't': '\t',
+    '\\': '\\'
+}
+
+# Precompile the regex for performance.
+_escape_pattern = re.compile(r'\\(.)')
+
+def unescape_attr_value(value: str) -> str:
+    """
+    Unescape the attribute value by converting escaped sequences back to their
+    literal forms using a regular expression substitution. This method is
+    typically faster than manually iterating through the string in Python,
+    thanks to the optimization of the regex engine in C.
+
+    Recognized escape sequences are:
+      - '\\n' -> newline
+      - '\\r' -> carriage return
+      - '\\t' -> tab
+      - '\\\\' -> backslash
+
+    Any unrecognized escape sequence results in the following character being
+    returned as-is.
+    """
+    return _escape_pattern.sub(lambda m: _escape_dict.get(m.group(1), m.group(1)), value)
 
 class AXUIElement(AccessibilityElement):
     """Fake implementation of the AXUIElement class."""
@@ -131,16 +161,19 @@ class FakeAccessibilityAPI(AccessibilityAPI):
         if attribute in element.xml_node.attrib:
             value = element.xml_node.get(attribute)
 
+            # Unescape the attribute value
+            unescaped_value = unescape_attr_value(value)
+
             # Handle special types
             if attribute == "AXDOMClassList":
                 # Convert space-separated string (HTML-style) back to list
-                return kAXErrorSuccess, value.split()
+                return kAXErrorSuccess, unescaped_value.split()
 
             # Handle boolean values
-            if value.lower() in ("true", "false"):
-                return kAXErrorSuccess, value.lower() == "true"
+            if unescaped_value.lower() in ("true", "false"):
+                return kAXErrorSuccess, unescaped_value.lower() == "true"
 
-            return kAXErrorSuccess, value
+            return kAXErrorSuccess, unescaped_value
 
         # If attribute is not in XML, treat as empty string for certain attributes
         # that typically default to empty strings rather than being missing
@@ -176,7 +209,10 @@ class FakeAccessibilityAPI(AccessibilityAPI):
         # In testing, we'll update the XML node's attribute
         # For real usage, we'd just track this in memory since we can't modify XMLs at runtime
         if attribute == "AXValue":
-            element.xml_node.set(attribute, str(value))
+            # Convert to string and escape special characters
+            from .snapshot import escape_attr_value
+            escaped_value = escape_attr_value(str(value))
+            element.xml_node.set(attribute, escaped_value)
             return kAXErrorSuccess
 
         return kAXErrorAttributeUnsupported

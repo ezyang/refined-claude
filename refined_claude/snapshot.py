@@ -17,6 +17,20 @@ from .accessibility_api import RealAccessibilityAPI
 
 log = logging.getLogger(__name__)
 
+def escape_attr_value(value: str) -> str:
+    """
+    Escape the attribute value by replacing backslashes and newline characters
+    (plus other common whitespace, if desired) with their escaped forms.
+    Order is important: first escape backslashes to avoid double conversion.
+    """
+    # Escape backslashes.
+    value = value.replace('\\', '\\\\')
+    # Escape newline, carriage return, and tab characters.
+    value = value.replace('\n', '\\n')
+    value = value.replace('\r', '\\r')
+    value = value.replace('\t', '\\t')
+    return value
+
 # Define which attributes we want to capture in our snapshot
 # These should cover all attributes used in the application
 ATTRIBUTES_TO_CAPTURE = {
@@ -64,14 +78,14 @@ def create_element_xml(element: HAX, element_id: int) -> ET.Element:
                     assert ' ' not in class_name, f"Class name '{class_name}' contains spaces"
 
             # Join classes with spaces as typically done in HTML/CSS
-            xml_element.set(attr_name, " ".join(class_list))
+            xml_element.set(attr_name, escape_attr_value(" ".join(class_list)))
         elif isinstance(value, (str, int, float, bool)):
-            # Basic types can be converted directly to strings
-            xml_element.set(attr_name, str(value))
+            # Basic types can be converted directly to strings and escaped
+            xml_element.set(attr_name, escape_attr_value(str(value)))
         else:
-            # For other types, use a simple string representation
+            # For other types, use a simple string representation and escape
             try:
-                xml_element.set(attr_name, str(value))
+                xml_element.set(attr_name, escape_attr_value(str(value)))
             except Exception as e:
                 log.warning(f"Could not convert {attr_name} to string: {e}")
 
