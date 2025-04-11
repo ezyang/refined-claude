@@ -59,7 +59,7 @@ def run_auto_approve(web_view, dry_run):
 
     # Look for the WebArea -> min-h-screen group -> bg-black group -> "Allow tool" dialog pattern
     match web_view:
-        case HAX(role="AXWebArea", title="Claude"):
+        case HAX(role="AXWebArea") if hasattr(web_view, "title") and "Claude" in web_view.title:
             for main_group in web_view.children:
                 if main_group.role == "AXGroup" and "min-h-screen" in main_group.dom_class_list:
                     for modal_group in main_group.children:
