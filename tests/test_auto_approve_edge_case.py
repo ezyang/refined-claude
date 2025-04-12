@@ -3,31 +3,14 @@
 Test the auto-approve functionality with the edge case XML containing a different title pattern.
 """
 
-import sys
-import os
-import unittest
-import logging
-from unittest.mock import patch, MagicMock
-
-# Add the parent directory to the Python path
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-
-# Mock the ApplicationServices and HIServices modules before importing our code
-mock_ApplicationServices = MagicMock()
-mock_HIServices = MagicMock()
-sys.modules['ApplicationServices'] = mock_ApplicationServices
-sys.modules['HIServices'] = mock_HIServices
+from unittest.mock import patch
 
 # Import our modules
-from refined_claude.fake_accessibility import FakeAccessibilityAPI, init_fake_api
-from refined_claude.accessibility import HAX
 from refined_claude.features import run_auto_approve, _last_allow_button_press_time
-
-# Set up logging for debugging
-logging.basicConfig(level=logging.DEBUG)
+from refined_claude.test_base import XMLAccessibilityTestBase
 
 
-class TestAutoApproveEdgeCase(unittest.TestCase):
+class TestAutoApproveEdgeCase(XMLAccessibilityTestBase):
     """Test the auto-approve functionality with edge case XML."""
 
     def setUp(self):
@@ -36,35 +19,9 @@ class TestAutoApproveEdgeCase(unittest.TestCase):
         global _last_allow_button_press_time
         _last_allow_button_press_time = 0.0
 
-        # Path to the XML dump of the accessibility tree with the edge case
-        xml_path = os.path.abspath(os.path.join(
-            os.path.dirname(__file__), '..', 'testdata', '20250410', 'approve_weird.xml'
-        ))
-
-        # Initialize the fake API with the XML dump
-        self.fake_api = init_fake_api(xml_path)
-
-        # Get the root window element
-        window = None
-        for element in self.fake_api.root_elements:
-            window_hax = HAX(element, self.fake_api)
-            if window_hax.role == "AXWindow" and window_hax.title == "Claude":
-                window = window_hax
-                break
-
-        self.assertIsNotNone(window, "Could not find Claude window")
-
-        # Find the web view by traversing the tree using HAX objects
-        self.web_view = None
-        web_areas = window.findall(lambda e: e.role == "AXWebArea" and "Claude" in e.title)
-
-        for web_area in web_areas:
-            if hasattr(web_area, 'url') and web_area.url and web_area.url.startswith("https://claude.ai"):
-                self.web_view = web_area
-                break
-
-        if not self.web_view:
-            raise ValueError("Could not find Claude web view in the accessibility tree")
+        # Initialize with the approve_weird.xml file, but don't try to find content element
+        # since we're mainly concerned with the tool approval dialog
+        self.setUp_with_xml('approve_weird.xml', date='20250410', find_content_element=False)
 
     def test_find_allow_button_in_edge_case(self):
         """Test that the 'Allow for this chat' button is found correctly in the edge case XML."""
