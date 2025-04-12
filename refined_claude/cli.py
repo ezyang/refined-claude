@@ -247,8 +247,6 @@ def run(
                     continue
 
                 # Segment A: Auto approve
-                # (This modal is distinct from the content element
-                # apparently?  Or maybe I misunderstood the parsing logic lol)
                 if auto_approve:
                     with TimingSegment(segment_times, 'A'):
                         run_auto_approve(web_view, dry_run)
@@ -288,6 +286,7 @@ def run(
                     if auto_continue:
                         with TimingSegment(segment_times, 'C'):
                             run_auto_continue(web_view, dry_run, continue_history, i, content_element)
+
                     # Segment S: Snapshot history
                     if snapshot_history:
                         with TimingSegment(segment_times, 'S'):
@@ -308,6 +307,8 @@ def run(
 
             if once:
                 return
+
+            time.sleep(0.5)
 
 
 # Add the snapshot command as a subcommand of 'cli'

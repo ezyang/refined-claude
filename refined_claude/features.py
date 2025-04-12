@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 import subprocess
 import time
-from typing import NamedTuple, List, Optional
+from typing import NamedTuple, List, Optional, Tuple, Any
 from contextlib import contextmanager
 from .accessibility import HAX, get_chat_url
 from .parsing import parse_content_element, format_messages
@@ -21,7 +21,7 @@ class ContinueHistory(NamedTuple):
 
 
 @contextmanager
-def TimingSegment(segment_times, segment_code):
+def TimingSegment(segment_times: dict, segment_code: str) -> None:
     """Context manager for timing code segments and recording the duration.
 
     Usage:
@@ -44,12 +44,16 @@ def TimingSegment(segment_times, segment_code):
         segment_times[segment_code] = duration
 
 
-def run_auto_approve(web_view, dry_run):
-    """Find and press the 'Allow for this chat' button for tool approvals.
+def find_approve_button(web_view: HAX) -> Optional[Tuple[HAX, float]]:
+    """Find the 'Allow for this chat' button for tool approvals.
 
-    This optimized version uses a targeted traversal approach to find the tool approval dialog,
-    then uses a limited findall only within that dialog to locate the button.
-    Includes a back-off mechanism to prevent pressing the button too frequently.
+    This is the read-only part that locates the button without manipulating the DOM.
+
+    Args:
+        web_view: The web view element
+
+    Returns:
+        Optional[Tuple[HAX, float]]: A tuple of (button, current_time) if found, None otherwise
     """
     global _last_allow_button_press_time
 
@@ -75,7 +79,7 @@ def run_auto_approve(web_view, dry_run):
     # If dialog is found, look for the button only within the dialog
     if not dialog:
         log.debug("Dialog not found")
-        return
+        return None
 
     # Limit the search to the found dialog
     buttons = dialog.findall(
@@ -83,7 +87,7 @@ def run_auto_approve(web_view, dry_run):
     )
     if not buttons:
         log.warning("Button not found: %s", dialog.repr())
-        return
+        return None
 
     # Check if enough time has elapsed since the last button press
     current_time = time.time()
@@ -91,29 +95,81 @@ def run_auto_approve(web_view, dry_run):
 
     if elapsed_time < 1000:  # 1s back-off period
         log.debug("Skipping button press, too soon after previous press (%.2f ms elapsed)", elapsed_time)
-        return
+        return None
 
     button = buttons[0]
     log.info("Found 'Allow for this chat' button using optimized search")
 
+    return (button, current_time)
+
+
+def perform_auto_approve(button: HAX, current_time: float, dry_run: bool) -> bool:
+    """Press the 'Allow for this chat' button for tool approvals.
+
+    This is the DOM manipulation part that presses the button.
+
+    Args:
+        button: The button element to press
+        current_time: The current time when the button was found
+        dry_run: Boolean indicating if this is a dry run (no changes)
+
+    Returns:
+        bool: True if button was pressed, False otherwise
+    """
+    global _last_allow_button_press_time
+
     # Check if we're in dry-run mode
     if dry_run:
         log.info("Stopping now because of --dry-run")
-        return
+        return False
 
     # Update the last button press time and press the button
     _last_allow_button_press_time = current_time
     button.press()
     log.info("Pressed button")
+    return True
 
 
-def run_auto_continue(web_view, dry_run, continue_history, index, content_element):
-    """Auto-continue Claude chats when they hit the reply size limit.
+def run_auto_approve(web_view: HAX, dry_run: bool) -> None:
+    """Find and press the 'Allow for this chat' button for tool approvals.
 
-    Uses targeted traversal to find the textarea and send button, which is more
-    efficient than using findall on the entire tree.
+    This optimized version uses a targeted traversal approach to find the tool approval dialog,
+    then uses a limited findall only within that dialog to locate the button.
+    Includes a back-off mechanism to prevent pressing the button too frequently.
+
+    This function now delegates to two separate functions:
+    1. find_approve_button: Finds the button (read-only)
+    2. perform_auto_approve: Presses the button (DOM manipulation)
     """
+    # First check if there's a button to approve
+    button_info = find_approve_button(web_view)
 
+    # If no button or we're throttling, exit early
+    if button_info is None:
+        return
+
+    # Unpack the button and current time
+    button, current_time = button_info
+
+    # Perform the DOM manipulation to press the button
+    perform_auto_approve(button, current_time, dry_run)
+
+
+def check_should_continue(web_view: HAX, continue_history: List[Optional[ContinueHistory]],
+                          index: int, content_element: HAX) -> Optional[HAX]:
+    """Determine if a Claude chat should be continued due to hitting reply size limit.
+
+    This is the read-only part of auto-continue that does analysis without DOM manipulation.
+
+    Args:
+        web_view: The web view element
+        continue_history: List tracking history of continuations
+        index: The index of the current window
+        content_element: Pre-found chat content element
+
+    Returns:
+        Optional[HAX]: The sticky footer element if continuation is needed, None otherwise
+    """
     parsed_messages = parse_content_element(content_element)
     should_continue = False
 
@@ -149,15 +205,11 @@ def run_auto_continue(web_view, dry_run, continue_history, index, content_elemen
 
     if not should_continue:
         log.debug("Trailing continue not found, all done")
-        return
+        return None
+
     log.info("Found 'hit the max length' at end of chat")
 
-    # Find textarea and send button using pattern matching instead of findall
-    textarea = None
-    send_button = None
-
-    # First find the sticky footer - this is a key pattern we can see in both run_notify_on_complete
-    # and in the path information
+    # Find the sticky footer for later use in DOM manipulation part
     sticky_footer = None
     for child in content_element.children:
         match child:
@@ -168,7 +220,27 @@ def run_auto_continue(web_view, dry_run, continue_history, index, content_elemen
 
     if not sticky_footer:
         log.warning("Can't find sticky footer area")
-        return
+        return None
+
+    return sticky_footer
+
+
+def perform_auto_continue(web_view: HAX, sticky_footer: HAX, dry_run: bool) -> bool:
+    """Perform the actual auto-continuation by filling the textbox and pressing submit.
+
+    This is the DOM manipulation part of auto-continue that interacts with form elements.
+
+    Args:
+        web_view: The web view element
+        sticky_footer: The sticky footer element containing the input controls
+        dry_run: Boolean indicating if this is a dry run (no changes)
+
+    Returns:
+        bool: True if auto-continue was triggered, False otherwise
+    """
+    # Find textarea and send button using pattern matching
+    textarea = None
+    send_button = None
 
     # Find the input container with the textarea
     for child in sticky_footer.children:
@@ -205,7 +277,7 @@ def run_auto_continue(web_view, dry_run, continue_history, index, content_elemen
                 [e.repr() for e in web_view.findall(lambda e: e.role == "AXTextArea")]
             ),
         )
-        return
+        return False
 
     if (contents := textarea.value) not in (
         "",
@@ -213,11 +285,11 @@ def run_auto_continue(web_view, dry_run, continue_history, index, content_elemen
         "Reply to Claude...\n",
     ):
         log.info("But textbox already has contents '%s', aborting", contents)
-        return
+        return False
 
     if dry_run:
         log.info("Stopping now because of --dry-run")
-        return
+        return False
 
     textarea.value = "Continue"
     time.sleep(0.1)  # wait for textarea contents to propagate.  TODO: tune
@@ -230,13 +302,37 @@ def run_auto_continue(web_view, dry_run, continue_history, index, content_elemen
 
     if not send_button:
         log.warning("No send button found, skipping auto-continue")
-        return
+        return False
 
     send_button.press()
     log.info("Auto-continue triggered!")
+    return True
 
 
-def check_chat_running_state(content_element):
+def run_auto_continue(web_view: HAX, dry_run: bool,
+                      continue_history: List[Optional[ContinueHistory]],
+                      index: int, content_element: HAX) -> None:
+    """Auto-continue Claude chats when they hit the reply size limit.
+
+    Uses targeted traversal to find the textarea and send button, which is more
+    efficient than using findall on the entire tree.
+
+    This function now delegates to two separate functions:
+    1. check_should_continue: Analyzes if auto-continuation is needed (read-only)
+    2. perform_auto_continue: Fills the textbox and submits the form (DOM manipulation)
+    """
+    # First do the read-only analysis to determine if we should continue
+    sticky_footer = check_should_continue(web_view, continue_history, index, content_element)
+
+    # If we shouldn't continue or couldn't find the sticky footer, exit early
+    if sticky_footer is None:
+        return
+
+    # If we should continue, perform the DOM manipulation
+    perform_auto_continue(web_view, sticky_footer, dry_run)
+
+
+def check_chat_running_state(content_element: HAX) -> bool:
     """Find the Stop Response button to determine if a chat is running.
 
     Args:
@@ -278,21 +374,45 @@ def check_chat_running_state(content_element):
     return False
 
 
-def run_notify_on_complete(web_view, running: list[int], i: int, content_element):
-    """Find the Stop Response button and track chat completion state.
-    Send notifications when the chat state changes.
+def check_notify_state(content_element: HAX, running: List[bool], i: int) -> Optional[str]:
+    """Check if a notification should be sent based on chat state.
+
+    This is the read-only part that analyzes if notification is needed.
 
     Args:
-        web_view: The web view element
+        content_element: Pre-found chat content element
         running: List tracking the running state of each window
         i: The index of the current window
-        content_element: Pre-found chat content element
+
+    Returns:
+        Optional[str]: Notification type if needed ('finished' or 'started'), None otherwise
     """
     # Check if the chat is running
     is_running = check_chat_running_state(content_element)
 
-    # Process the running state
+    # Determine if a state change requires notification
     if running[i] and not is_running:
+        return 'finished'
+    elif not running[i] and is_running:
+        return 'started'
+
+    return None
+
+
+def perform_notification(notification_type: str, running: List[bool], i: int) -> bool:
+    """Send a notification and update running state.
+
+    This is the system interaction part that displays notifications and updates state.
+
+    Args:
+        notification_type: Type of notification to send ('finished' or 'started')
+        running: List tracking the running state of each window
+        i: The index of the current window
+
+    Returns:
+        bool: True if notification was sent, False otherwise
+    """
+    if notification_type == 'finished':
         log.info("Detected chat response finished")
         running[i] = False
         subprocess.check_call(
@@ -302,26 +422,101 @@ def run_notify_on_complete(web_view, running: list[int], i: int, content_element
                 'display notification "Claude response finished" with title "Claude" sound name "Glass"',
             ]
         )
-    elif not running[i] and is_running:
+        return True
+    elif notification_type == 'started':
         log.info("Detected chat response started")
         running[i] = True
+        return True
+
+    return False
 
 
-def run_snapshot_history(content_element, output_file=None):
-    """Capture text content from the chat and optionally save to a file."""
+def run_notify_on_complete(web_view: HAX, running: List[bool], i: int, content_element: HAX) -> None:
+    """Find the Stop Response button and track chat completion state.
+    Send notifications when the chat state changes.
 
+    This function now delegates to two separate functions:
+    1. check_notify_state: Analyzes if notification is needed (read-only)
+    2. perform_notification: Sends notification and updates state (system interaction)
+
+    Args:
+        web_view: The web view element
+        running: List tracking the running state of each window
+        i: The index of the current window
+        content_element: Pre-found chat content element
+    """
+    # First check if a notification should be sent
+    notification_type = check_notify_state(content_element, running, i)
+
+    # If no notification needed, exit early
+    if notification_type is None:
+        return
+
+    # Perform the notification
+    perform_notification(notification_type, running, i)
+
+
+def capture_chat_content(content_element: HAX) -> Optional[str]:
+    """Capture text content from the chat.
+
+    This is the read-only part that extracts content without file operations.
+
+    Args:
+        content_element: Pre-found chat content element
+
+    Returns:
+        Optional[str]: Formatted text content if successful, None otherwise
+    """
     log.debug("Taking snapshot of chat content")
     parsed_messages = parse_content_element(content_element)
     text_content = format_messages(parsed_messages)
 
     if text_content:
         log.info("Captured %d text", len(text_content))
+        return text_content
 
-        if output_file:
-            try:
-                timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
-                with open(output_file, "w") as f:
-                    f.write(text_content)
-                log.info("Saved snapshot to %s", output_file)
-            except Exception as e:
-                log.error("Failed to save snapshot: %s", e)
+    return None
+
+
+def save_chat_snapshot(text_content: str, output_file: Optional[str]) -> bool:
+    """Save chat content to a file.
+
+    This is the file system interaction part that saves content to disk.
+
+    Args:
+        text_content: The formatted text content to save
+        output_file: Path to the file where content should be saved
+
+    Returns:
+        bool: True if saved successfully, False otherwise
+    """
+    if not output_file:
+        return False
+
+    try:
+        timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
+        with open(output_file, "w") as f:
+            f.write(text_content)
+        log.info("Saved snapshot to %s", output_file)
+        return True
+    except Exception as e:
+        log.error("Failed to save snapshot: %s", e)
+        return False
+
+
+def run_snapshot_history(content_element: HAX, output_file: Optional[str] = None) -> None:
+    """Capture text content from the chat and optionally save to a file.
+
+    This function now delegates to two separate functions:
+    1. capture_chat_content: Extracts content (read-only)
+    2. save_chat_snapshot: Saves content to a file (file system interaction)
+    """
+    # First capture the content
+    text_content = capture_chat_content(content_element)
+
+    # If no content captured or no output file specified, exit early
+    if not text_content or not output_file:
+        return
+
+    # Save the content to a file
+    save_chat_snapshot(text_content, output_file)
