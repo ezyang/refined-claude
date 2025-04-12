@@ -89,6 +89,20 @@ The application includes a testing infrastructure that allows you to test functi
 
 To create a test that uses this infrastructure, see the example in `tests/test_fake_accessibility.py`.
 
+#### Testing State Changes with Mocking
+
+For features that rely on state changes (such as `notify_on_complete`), we use a combination of:
+
+1. XML snapshots for the initial state
+2. Mocking for simulating state changes
+
+This approach is demonstrated in `tests/test_notify_on_complete_mocked.py`, where we:
+- Use a snapshot for the initial UI state
+- Mock specific functions like `check_chat_running_state` to simulate state transitions
+- Test the logic that depends on these state changes
+
+This pattern is particularly useful when testing features that respond to UI changes that are difficult to capture in static XML snapshots.
+
 ## Troubleshooting
 
 Sometimes, refined-claude will fail to find the WebView on your open window.  This can happen if Claude is opened after you run refined-claude, or if you open refined-claude too soon after opening Claude.  Unfortunately, the most reliable way to fix this problem is to restart refined-claude.
