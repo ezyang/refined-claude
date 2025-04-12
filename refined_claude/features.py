@@ -214,6 +214,11 @@ def run_auto_continue(web_view, dry_run, continue_history, index, content_elemen
     ):
         log.info("But textbox already has contents '%s', aborting", contents)
         return
+
+    if dry_run:
+        log.info("Stopping now because of --dry-run")
+        return
+
     textarea.value = "Continue"
     time.sleep(0.1)  # wait for textarea contents to propagate.  TODO: tune
 
@@ -225,10 +230,6 @@ def run_auto_continue(web_view, dry_run, continue_history, index, content_elemen
 
     if not send_button:
         log.warning("No send button found, skipping auto-continue")
-        return
-
-    if dry_run:
-        log.info("Stopping now because of --dry-run")
         return
 
     send_button.press()
