@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import List
+from typing import List, Optional
 from .accessibility import HAX
 
 log = logging.getLogger(__name__)
@@ -16,16 +16,26 @@ class MessageInfo:
     hit_max_length: bool = False  # Whether this is a max length message
 
 
-def parse_content_element(content_element):
+class UnrecognizedElementError(Exception):
+    """Raised when an unrecognized element is encountered in strict mode."""
+    pass
+
+
+def parse_content_element(content_element, strict: bool = False):
     """Parse content element once and return structured data.
 
     This function unifies the parsing logic used by multiple features.
 
     Args:
         content_element: The HAX element containing the chat messages
+        strict: When True, raises UnrecognizedElementError for unrecognized elements
+               instead of issuing a warning
 
     Returns:
         List[MessageInfo]: List of parsed messages with metadata
+
+    Raises:
+        UnrecognizedElementError: When strict=True and an unrecognized element is found
     """
     if content_element is None:
         return []
@@ -61,7 +71,7 @@ def parse_content_element(content_element):
                 for para in inner.children:
                     if "absolute" in para.dom_class_list:
                         break  # message end
-                    content_blocks.append("\n".join(parse_para(para)))
+                    content_blocks.append("\n".join(parse_para(para, strict=strict)))
 
                 # Check if this is a max length message
                 hit_max_length = False
@@ -105,7 +115,7 @@ def parse_content_element(content_element):
                 for para in inners:
                     if "absolute" in para.dom_class_list:
                         break  # message end
-                    content_blocks.append("\n".join(parse_para(para)))
+                    content_blocks.append("\n".join(parse_para(para, strict=strict)))
 
                 parsed_messages.append(
                     MessageInfo(
@@ -132,21 +142,37 @@ def parse_content_element(content_element):
 
             # Unrecognized message
             case _:
-                log.warning("unrecognized message '%s' %s", message.role, message.repr(2))
-                parsed_messages.append(
-                    MessageInfo(
-                        type="unknown",
-                        content=[message.inner_text()],
-                        hit_max_length=False,
+                error_msg = f"unrecognized message '{message.role}' {message.repr(2)}"
+                if strict:
+                    raise UnrecognizedElementError(error_msg)
+                else:
+                    log.warning(error_msg)
+                    parsed_messages.append(
+                        MessageInfo(
+                            type="unknown",
+                            content=[message.inner_text()],
+                            hit_max_length=False,
+                        )
                     )
-                )
 
     return parsed_messages
 
 
-def parse_para(para):
+def parse_para(para, strict: bool = False):
     """Parse a paragraph into lines, handling lists as well.  Conventionally
-    these lines are joined together with a single newline."""
+    these lines are joined together with a single newline.
+
+    Args:
+        para: The paragraph element to parse
+        strict: When True, raises UnrecognizedElementError for unrecognized elements
+               instead of issuing a warning
+
+    Returns:
+        List[str]: The parsed paragraph lines
+
+    Raises:
+        UnrecognizedElementError: When strict=True and an unrecognized element is found
+    """
     role = para.role
     ret = []
     if role == "AXGroup":
@@ -154,7 +180,7 @@ def parse_para(para):
     elif role == "AXList":
         is_bullet = "list-disc" in para.dom_class_list
         for i, t in enumerate(para.children):
-            parsed_t = parse_para(t)
+            parsed_t = parse_para(t, strict=strict)
             if not parsed_t:
                 # Still generate an empty bullet
                 parsed_t = [""]
@@ -172,24 +198,33 @@ def parse_para(para):
     elif role == "":
         log.debug("skipping no-role element %s", para.repr())
     else:
-        log.warning("unrecognized %s, %s", role, para.repr())
-        ret.append(para.inner_text())
+        error_msg = f"unrecognized {role}, {para.repr()}"
+        if strict:
+            raise UnrecognizedElementError(error_msg)
+        else:
+            log.warning(error_msg)
+            ret.append(para.inner_text())
     return ret
 
 
-def get_message_stats(content_element):
+def get_message_stats(content_element, strict: bool = False):
     """Calculate message statistics from the content element.
 
     Args:
         content_element: The HAX element containing the chat messages
+        strict: When True, raises UnrecognizedElementError for unrecognized elements
+               instead of issuing a warning
 
     Returns:
         tuple: (message_count, last_assistant_msg_length)
+
+    Raises:
+        UnrecognizedElementError: When strict=True and an unrecognized element is found
     """
     if content_element is None:
         return 0, 0
 
-    parsed_messages = parse_content_element(content_element)
+    parsed_messages = parse_content_element(content_element, strict=strict)
     message_count = len(parsed_messages)
 
     # Find the last assistant message and calculate its length
