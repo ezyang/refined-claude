@@ -1,0 +1,31 @@
+{
+  "compilerOptions": {
+    /* Safety first */
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "noImplicitOverride": true,
+    "forceConsistentCasingInFileNames": true,
+
+    /* Build-friendly */
+    "incremental": true,
+    "composite": true,
+    "declaration": true,
+    "declarationMap": true,
+    "skipLibCheck": false,
+
+    /* Module story: ESM everywhere */
+    "module": "ESNext",
+    "moduleResolution": "NodeNext",
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM"],
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+
+    /* Paths shared across workspace */
+    "baseUrl": ".",
+    "paths": {
+      "@utils/*": ["packages/utils/src/*"]
+    }
+  }
+}
