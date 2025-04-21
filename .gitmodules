@@ -1,3 +1,6 @@
 [submodule "vendor/rrweb"]
 	path = vendor/rrweb
 	url = git@github.com:rrweb-io/rrweb.git
+[submodule "vendor/happy-dom"]
+	path = vendor/happy-dom
+	url = git@github.com:capricorn86/happy-dom.git
