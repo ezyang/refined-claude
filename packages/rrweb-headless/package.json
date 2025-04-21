@@ -16,11 +16,13 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test-replay": "node dist/cli.js"
+    "test:e2e": "vitest run --config vitest.e2e.config.ts",
+    "test-replay": "node dist/cli.js",
+    "test-replay:debug": "node dist/cli.js --debug --headful --timeout 120000"
   },
   "dependencies": {
     "playwright": "^1.41.0",
-    "rrweb": "^2.0.0"
+    "rrweb": "^2.0.0-alpha.4"
   },
   "devDependencies": {
     "@typescript-eslint/eslint-plugin": "^7.0.0",

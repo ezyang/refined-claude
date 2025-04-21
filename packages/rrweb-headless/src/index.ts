@@ -23,6 +23,11 @@ interface RrwebHeadlessOptions {
    * Timeout in milliseconds (default: 30000)
    */
   timeout?: number;
+
+  /**
+   * Whether to run in headless mode (default: true)
+   */
+  headless?: boolean;
 }
 
 interface RrwebHeadlessResult {
@@ -45,14 +50,16 @@ export async function runRrwebHeadless(options: RrwebHeadlessOptions): Promise<R
     events,
     playbackSpeed = 1,
     selectors = [],
-    timeout = 30000
+    timeout = 30000,
+    headless = true
   } = options;
 
   let browser: Browser | null = null;
 
   try {
-    // Launch a browser
-    browser = await chromium.launch({ headless: true });
+    // Launch a browser with the specified headless mode
+    console.log(`Launching browser in ${headless ? 'headless' : 'headful'} mode`);
+    browser = await chromium.launch({ headless });
     const context = await browser.newContext();
     const page = await context.newPage();
 
@@ -108,30 +115,105 @@ async function setupRrwebPage(page: Page, events: eventWithTime[], playbackSpeed
         <style>
           body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; }
           #replay { width: 100%; height: 100%; }
+          #status {
+            position: fixed;
+            bottom: 10px;
+            right: 10px;
+            background: rgba(0,0,0,0.7);
+            color: white;
+            padding: 5px 10px;
+            border-radius: 4px;
+            font-family: monospace;
+          }
+          #error {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            background: #ff5252;
+            color: white;
+            padding: 10px;
+            text-align: center;
+            font-family: sans-serif;
+            display: none;
+          }
+          .highlight {
+            outline: 2px solid red !important;
+            outline-offset: 2px !important;
+            background-color: rgba(255, 0, 0, 0.2) !important;
+          }
         </style>
       </head>
       <body>
         <div id="replay"></div>
+        <div id="status">Loading...</div>
+        <div id="error"></div>
         <script>
           // Will be replaced with actual events
           const events = [];
+          let replayer;
+
+          // Status tracking
+          const statusEl = document.getElementById('status');
+          const errorEl = document.getElementById('error');
+
+          // Display error message
+          function showError(message) {
+            errorEl.textContent = message;
+            errorEl.style.display = 'block';
+            console.error(message);
+          }
 
           // Initialize replayer when page loads
           window.addEventListener('DOMContentLoaded', () => {
-            const replayer = new rrweb.Replayer(events, {
-              root: document.getElementById('replay'),
-              liveMode: false,
-              showWarning: false,
-              showDebug: false,
-              blockClass: 'no-record',
-              skipInactive: true
-            });
+            try {
+              if (!events || !events.length) {
+                showError('No events provided');
+                return;
+              }
 
-            // Set playback speed
-            replayer.setSpeed(${playbackSpeed});
+              statusEl.textContent = \`Loaded \${events.length} events\`;
 
-            // Start playback
-            replayer.play();
+              replayer = new rrweb.Replayer(events, {
+                root: document.getElementById('replay'),
+                liveMode: false,
+                showWarning: false,
+                showDebug: false,
+                blockClass: 'no-record',
+                skipInactive: true
+              });
+
+              // Set playback speed
+              replayer.setSpeed(${playbackSpeed});
+              statusEl.textContent = \`Playing at \${${playbackSpeed}}x speed...\`;
+
+              // Start playback
+              replayer.play();
+
+              // Display timing info
+              setInterval(() => {
+                const currentTime = replayer.getCurrentTime();
+                const totalTime = replayer.getMetaData().totalTime;
+                const progress = Math.round((currentTime / totalTime) * 100);
+                statusEl.textContent = \`Replay: \${progress}% (\${Math.floor(currentTime / 1000)}s / \${Math.floor(totalTime / 1000)}s)\`;
+              }, 500);
+
+              // When replay finishes, highlight any selectors that match
+              setTimeout(() => {
+                const selectors = ${JSON.stringify(selectors || [])};
+                if (selectors && selectors.length) {
+                  selectors.forEach(selector => {
+                    const elements = document.querySelectorAll(selector);
+                    elements.forEach(el => el.classList.add('highlight'));
+                    statusEl.textContent = \`Found \${elements.length} matches for \${selector}\`;
+                  });
+                }
+              }, replayer.getMetaData().totalTime / ${playbackSpeed} + 1000);
+
+            } catch (err) {
+              showError('Error initializing replayer: ' + err.message);
+              console.error(err);
+            }
           });
         </script>
       </body>
@@ -173,13 +255,17 @@ export async function loadEventsFromFile(filePath: string): Promise<eventWithTim
 /**
  * Utility function to run a replay on the test data file
  */
-export async function runTestData(testDataPath: string = '../../testdata/approve-tool.json'): Promise<RrwebHeadlessResult> {
+export async function runTestData(
+  testDataPath: string = '../../testdata/approve-tool.json',
+  options: Partial<Omit<RrwebHeadlessOptions, 'events'>> = {}
+): Promise<RrwebHeadlessResult> {
   const resolvedPath = path.resolve(__dirname, testDataPath);
   const events = await loadEventsFromFile(resolvedPath);
 
   return runRrwebHeadless({
     events,
     playbackSpeed: 4,
-    selectors: ['.z-modal']
+    selectors: ['.z-modal'],
+    ...options
   });
 }

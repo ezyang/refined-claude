@@ -1,14 +1,33 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { runRrwebHeadless, loadEventsFromFile, runTestData } from './index';
 import type { eventWithTime } from 'rrweb/typings/types';
-import { chromium } from 'playwright';
 
-// Mock Playwright
-vi.mock('playwright', () => {
+// Mock modules
+vi.mock('fs/promises', async () => {
+  return {
+    default: {
+      readFile: vi.fn().mockResolvedValue(JSON.stringify([
+        { timestamp: 1000, type: 0, data: {} },
+        { timestamp: 2000, type: 2, data: {} },
+        { timestamp: 3000, type: 3, data: {} }
+      ]))
+    },
+    readFile: vi.fn().mockResolvedValue(JSON.stringify([
+      { timestamp: 1000, type: 0, data: {} },
+      { timestamp: 2000, type: 2, data: {} },
+      { timestamp: 3000, type: 3, data: {} }
+    ]))
+  };
+});
+
+vi.mock('playwright', async () => {
+  const mockEvaluate = vi.fn();
+  mockEvaluate.mockImplementation(() => true);
+
   const mockPage = {
     setContent: vi.fn().mockResolvedValue(undefined),
     waitForTimeout: vi.fn().mockResolvedValue(undefined),
-    evaluate: vi.fn().mockResolvedValue(true)
+    evaluate: mockEvaluate
   };
 
   const mockContext = {
@@ -26,15 +45,6 @@ vi.mock('playwright', () => {
     }
   };
 });
-
-// Mock fs/promises
-vi.mock('fs/promises', () => ({
-  readFile: vi.fn().mockResolvedValue(JSON.stringify([
-    { timestamp: 1000, type: 0, data: {} },
-    { timestamp: 2000, type: 2, data: {} },
-    { timestamp: 3000, type: 3, data: {} }
-  ]))
-}));
 
 describe('rrweb-headless', () => {
   beforeEach(() => {
@@ -55,6 +65,9 @@ describe('rrweb-headless', () => {
         selectors: ['.z-modal']
       });
 
+      // Get the mocked chromium
+      const { chromium } = await import('playwright');
+
       expect(chromium.launch).toHaveBeenCalledWith({ headless: true });
       expect(result).toEqual({
         elementExists: true,
@@ -65,18 +78,22 @@ describe('rrweb-headless', () => {
     });
 
     it('should handle multiple selectors', async () => {
+      // Override the mock for this test to return different values for different selectors
+      const { chromium } = await import('playwright');
+      const mockBrowser = await chromium.launch();
+      const mockContext = await mockBrowser.newContext();
+      const mockPage = await mockContext.newPage();
+
+      // Update the evaluate mock to check the selector
+      mockPage.evaluate.mockImplementation((fn, selector) => {
+        return selector === '.z-modal';
+      });
+
       const events: eventWithTime[] = [
         { timestamp: 1000, type: 0, data: {} } as any,
         { timestamp: 2000, type: 2, data: {} } as any,
         { timestamp: 3000, type: 3, data: {} } as any
       ];
-
-      const page = (await (await (chromium as any).launch()).newContext()).newPage();
-
-      // Make the first selector exist, second one not exist
-      page.evaluate.mockImplementation((fn, selector) => {
-        return selector === '.z-modal';
-      });
 
       const result = await runRrwebHeadless({
         events,
@@ -84,13 +101,9 @@ describe('rrweb-headless', () => {
         selectors: ['.z-modal', '.non-existent']
       });
 
-      expect(result).toEqual({
-        elementExists: false,
-        selectorResults: {
-          '.z-modal': true,
-          '.non-existent': false
-        }
-      });
+      expect(result.elementExists).toBe(false);
+      expect(result.selectorResults['.z-modal']).toBe(true);
+      expect(result.selectorResults['.non-existent']).toBe(false);
     });
   });
 
