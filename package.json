@@ -1,1 +1,23 @@
-{"name": "sublime-claude", "version": "0.1.0", "private": true, "packageManager": "pnpm@8.15.1", "scripts": {"dev": "turbo run dev --parallel", "lint": "turbo run lint", "typecheck": "turbo run typecheck", "test": "turbo run test --parallel", "build": "turbo run build", "clean": "turbo prune --force && rimraf **/dist"}, "workspaces": ["apps/*", "packages/*"], "devDependencies": {"rimraf": "^5.0.5", "turbo": "^1.11.3", "typescript": "^5.3.3"}}
+{
+  "name": "sublime-claude",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@8.15.1",
+  "scripts": {
+    "dev": "turbo run dev --parallel",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test --parallel",
+    "build": "turbo run build",
+    "clean": "turbo prune --force && rimraf **/dist"
+  },
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "devDependencies": {
+    "rimraf": "^5.0.5",
+    "turbo": "^1.11.3",
+    "typescript": "^5.3.3"
+  }
+}
