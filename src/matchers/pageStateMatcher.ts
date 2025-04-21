@@ -14,7 +14,7 @@ export class PageStateMatcher {
    * @param document The document to check against
    * @returns boolean indicating whether the matcher matches
    */
-  public matches(document: Document): boolean {
+  public matches(document: any): boolean {
     // If no CSS selectors were provided, assume it's not a match
     if (!this.cssSelectors || this.cssSelectors.length === 0) {
       return false;

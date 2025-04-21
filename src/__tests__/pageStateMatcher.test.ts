@@ -7,7 +7,7 @@ import { Window } from 'happy-dom';
 describe('PageStateMatcher', () => {
   // Test the basic functionality of PageStateMatcher
   describe('basic functionality', () => {
-    let document: Document;
+    let document: any; // Using 'any' to avoid TypeScript errors with happy-dom Document
 
     beforeEach(() => {
       // Create a simple document with happy-dom
@@ -54,7 +54,7 @@ describe('PageStateMatcher', () => {
 
   // Test with the actual rrweb recording
   describe('with rrweb recording', () => {
-    let recordingDocument: Document;
+    let recordingDocument: any; // Using 'any' to avoid TypeScript errors with happy-dom Document
 
     beforeAll(() => {
       // Load and process the rrweb recording

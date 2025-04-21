@@ -1,1 +1,3 @@
 # codemcp configuration file
+[commands]
+test = ["npm", "test"]
