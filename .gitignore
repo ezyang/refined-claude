@@ -32,3 +32,5 @@ yarn-error.log*
 !.vscode/extensions.json
 !.vscode/settings.json
 .DS_Store
+
+testdata
