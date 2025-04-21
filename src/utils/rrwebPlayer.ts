@@ -63,19 +63,36 @@ export function applySnapshotToVirtualDom(window: Window, event: eventWithTime):
 }
 
 /**
- * Processes an rrweb recording and returns the final DOM state
+ * Processes an rrweb recording and returns the final DOM state along with match timestamps
  * @param events rrweb events to process
- * @returns A Document representing the final state
+ * @param matcher Optional matcher to check when the condition first matches
+ * @returns An object containing the document and match timestamps
  */
-export function processRrwebRecording(events: eventWithTime[]): any {
+export function processRrwebRecording(events: eventWithTime[], matcher?: any): {
+  document: any;
+  firstMatchTimestamp: number | null;
+  lastEventTimestamp: number | null;
+} {
   const window = createVirtualDom();
+  let firstMatchTimestamp: number | null = null;
+  let lastEventTimestamp: number | null = null;
 
-  // Process snapshot events (simplified approach)
-  events.forEach(event => {
+  // Process snapshot events
+  for (const event of events) {
     if (event.type === EventType.FullSnapshot || event.type === EventType.IncrementalSnapshot) {
       applySnapshotToVirtualDom(window, event);
-    }
-  });
+      lastEventTimestamp = event.timestamp;
 
-  return window.document;
+      // If we have a matcher and we haven't found a match yet, check if this event causes a match
+      if (matcher && firstMatchTimestamp === null && matcher.matches(window.document)) {
+        firstMatchTimestamp = event.timestamp;
+      }
+    }
+  }
+
+  return {
+    document: window.document,
+    firstMatchTimestamp,
+    lastEventTimestamp
+  };
 }

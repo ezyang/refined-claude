@@ -54,13 +54,25 @@ describe('PageStateMatcher', () => {
 
   // Test with the actual rrweb recording
   describe('with rrweb recording', () => {
-    let recordingDocument: any; // Using 'any' to avoid TypeScript errors with happy-dom Document
+    let recordingResult: {
+      document: any;
+      firstMatchTimestamp: number | null;
+      lastEventTimestamp: number | null;
+    };
 
     beforeAll(() => {
       // Load and process the rrweb recording
       const recordingPath = path.resolve(__dirname, '../../testdata/approve-tool.json');
       const events = loadRrwebRecording(recordingPath);
-      recordingDocument = processRrwebRecording(events);
+
+      // Get the rule we want to test
+      const rule = getAllowToolDialogRule();
+
+      // Extract the PageStateMatcher from the rule
+      const matcher = rule.conditions[0] as PageStateMatcher;
+
+      // Process the recording with the matcher to track when it first matches
+      recordingResult = processRrwebRecording(events, matcher);
     });
 
     test('rule matches when dialog appears in recording', () => {
@@ -71,7 +83,14 @@ describe('PageStateMatcher', () => {
       const matcher = rule.conditions[0] as PageStateMatcher;
 
       // Test if the matcher matches the document from the recording
-      expect(matcher.matches(recordingDocument)).toBe(true);
+      expect(matcher.matches(recordingResult.document)).toBe(true);
+
+      // Assert the exact timestamps
+      expect(recordingResult.firstMatchTimestamp).toBe(1745221161698);
+      expect(recordingResult.lastEventTimestamp).toBe(1745221173502);
+
+      // Verify timestamp ordering - first match should occur before the last event
+      expect(recordingResult.firstMatchTimestamp as number).toBeLessThan(recordingResult.lastEventTimestamp as number);
     });
   });
 });
