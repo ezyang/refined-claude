@@ -9,14 +9,13 @@
     "typecheck": "turbo run typecheck",
     "test": "turbo run test --parallel",
     "build": "turbo run build",
-    "clean": "turbo prune --force && rimraf **/dist"
+    "clean": "turbo prune --force && rm -rf **/dist"
   },
   "workspaces": [
     "apps/*",
     "packages/*"
   ],
   "devDependencies": {
-    "rimraf": "^5.0.5",
     "turbo": "^1.11.3",
     "typescript": "^5.3.3"
   }
