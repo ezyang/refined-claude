@@ -89,6 +89,15 @@ export async function runRrwebReplay(options: RrwebReplayOptions): Promise<Rrweb
 
     for (const selector of selectors) {
       const exists = await page.evaluate((sel) => {
+        // Look for the iframe that rrweb-replay creates
+        const iframe = document.querySelector('#replay iframe');
+
+        // If iframe exists, search within its document
+        if (iframe && iframe.contentDocument) {
+          return iframe.contentDocument.querySelector(sel) !== null;
+        }
+
+        // Fallback to the main document if iframe not found
         return document.querySelector(sel) !== null;
       }, selector);
 
@@ -200,6 +209,8 @@ async function setupRrwebPage(page: Page, events: eventWithTime[], playbackSpeed
             outline: 2px solid red !important;
             outline-offset: 2px !important;
             background-color: rgba(255, 0, 0, 0.2) !important;
+            z-index: 10000 !important;
+            position: relative !important;
           }
         </style>
       </head>
@@ -356,8 +367,21 @@ async function setupRrwebPage(page: Page, events: eventWithTime[], playbackSpeed
                 const selectors = ${JSON.stringify(selectors || [])};
                 if (selectors && selectors.length) {
                   selectors.forEach(selector => {
-                    const elements = document.querySelectorAll(selector);
-                    elements.forEach(el => el.classList.add('highlight'));
+                    // Look for the iframe that rrweb-replay creates
+                    const iframe = document.querySelector('#replay iframe');
+                    let elements = [];
+
+                    // If iframe exists, search within its document
+                    if (iframe && iframe.contentDocument) {
+                      elements = iframe.contentDocument.querySelectorAll(selector);
+                      // Add highlight class to elements inside iframe
+                      elements.forEach(el => el.classList.add('highlight'));
+                    } else {
+                      // Fallback to the main document if iframe not found
+                      elements = document.querySelectorAll(selector);
+                      elements.forEach(el => el.classList.add('highlight'));
+                    }
+
                     statusEl.textContent = \`Found \${elements.length} matches for \${selector}\`;
                   });
                 }

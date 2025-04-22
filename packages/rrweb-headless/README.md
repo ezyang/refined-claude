@@ -7,7 +7,7 @@ A tool for running [rrweb](https://github.com/rrweb-io/rrweb) replays in headles
 - Run rrweb replays headlessly or with a visible browser
 - View complete webpage content alongside mouse movements and interactions
 - Set playback speed for faster analysis
-- Check for the existence of specific elements using CSS selectors
+- Check for the existence of specific elements using CSS selectors (works with elements inside the iframe)
 - Built-in debugging tools and visualizations
 
 ## Usage
@@ -40,6 +40,21 @@ If you're not seeing the actual webpage content (only mouse movements):
 2. Use `headless: false` to view the replay in a browser window
 3. Check the console logs for warnings about missing snapshots
 4. For debugging, use the CLI tool with `--timeout 0` to keep the browser open
+
+### Selectors and iframes
+
+The `selectors` option allows you to check for the existence of specific elements using CSS selectors. Since rrweb-replay renders content inside an iframe, the selectors are automatically checked within this iframe's document. This ensures that you can target elements that appear in the replayed content rather than in the outer page.
+
+Example usage:
+```typescript
+const result = await runRrwebReplay({
+  events,
+  selectors: ['.modal-dialog', '#submit-button'],
+  // other options...
+});
+
+// Check if the elements were found
+console.log(result.selectorResults); // { '.modal-dialog': true, '#submit-button': false }
 
 ### As a CLI debugging tool
 
