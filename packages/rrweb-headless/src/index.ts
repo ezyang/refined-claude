@@ -254,7 +254,7 @@ function calculateReplayDuration(events: eventWithTime[]): number {
   }
 
   // Ensure the events have timestamp properties
-  if (!events[0].hasOwnProperty('timestamp') || !events[events.length - 1].hasOwnProperty('timestamp')) {
+  if (!events[0]?.hasOwnProperty('timestamp') || !events[events.length - 1]?.hasOwnProperty('timestamp')) {
     return 5000; // Default duration if events don't have timestamp
   }
 
@@ -269,7 +269,9 @@ function calculateReplayDuration(events: eventWithTime[]): number {
  */
 export async function loadEventsFromFile(filePath: string): Promise<eventWithTime[]> {
   const content = await fs.readFile(filePath, 'utf-8');
-  return JSON.parse(content);
+  const parsed = JSON.parse(content);
+  // Handle both formats: direct array or object with 'events' property
+  return Array.isArray(parsed) ? parsed : parsed.events;
 }
 
 /**
