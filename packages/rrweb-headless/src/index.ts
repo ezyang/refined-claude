@@ -73,12 +73,16 @@ export async function runRrwebReplay(options: RrwebReplayOptions): Promise<Rrweb
     headless = true
   } = options;
 
+  // Allow overriding headless mode via environment variable
+  const isDebugMode = process.env.SUBLIME_DEBUG === '1';
+  const effectiveHeadless = isDebugMode ? false : headless;
+
   let browser: Browser | null = null;
 
   try {
-    // Launch a browser with the specified headless mode
-    console.log(`Launching browser in ${headless ? 'headless' : 'headful'} mode`);
-    browser = await chromium.launch({ headless });
+    // Launch a browser with the specified headless mode, overridden by env var if present
+    console.log(`Launching browser in ${effectiveHeadless ? 'headless' : 'headful'} mode${isDebugMode ? ' (debug mode enabled via SUBLIME_DEBUG)' : ''}`);
+    browser = await chromium.launch({ headless: effectiveHeadless });
     const context = await browser.newContext();
     const page = await context.newPage();
 
