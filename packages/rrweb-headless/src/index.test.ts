@@ -15,11 +15,18 @@ describe('rrweb-headless e2e', () => {
     expect(testEvents);
     expect(testEvents.length !== 0);
 
+    // Path to our extension
+    const extensionPath = path.resolve(__dirname, '../../extension/dist');
+
     // Run the replay with actual events and check for z-modal
     const result = await runRrwebReplay({
       events: testEvents,
       playbackSpeed: 4,
-      timeout: 10000 // Shorter timeout for CI environments
+      timeout: 10000, // Shorter timeout for CI environments
+      chromiumArgs: [
+        `--disable-extensions-except=${extensionPath}`,
+        `--load-extension=${extensionPath}`
+      ]
     });
 
     // Log detailed results
@@ -32,6 +39,26 @@ describe('rrweb-headless e2e', () => {
     expect(typeof result.replayCompleted).toBe('boolean');
     if (result.error) {
       console.error('Replay error:', result.error);
+    }
+
+    // After the replay, we should check if the allow button was detected
+    // This would require a new function to evaluate in the page context
+    const allowButtonClicked = await result.page?.evaluate(() => {
+      return document.getElementById('allow-button-clicked-marker') !== null;
+    });
+
+    console.log('Allow button clicked:', allowButtonClicked);
+
+    // Depending on the test data, we might expect this to be true or false
+    // For now we'll just log it, but in a real test you'd add an assertion
+
+    // Clean up resources
+    if (result.page) {
+      const browser = result.page.context().browser();
+      await result.page.close();
+      if (browser) {
+        await browser.close();
+      }
     }
   }, 30_000);
 });

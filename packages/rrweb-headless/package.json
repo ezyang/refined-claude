@@ -21,6 +21,7 @@
     "test-replay:debug": "tsx src/cli.ts --headful --timeout 0"
   },
   "dependencies": {
+    "@sublime-claude/extension": "0.1.0",
     "playwright": "^1.41.0",
     "rrweb": "^2.0.0-alpha.4",
     "rrweb-player": "^1.0.0-alpha.4"

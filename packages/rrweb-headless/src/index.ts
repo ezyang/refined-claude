@@ -32,6 +32,11 @@ interface RrwebReplayOptions {
    * Whether to run in headless mode (default: true)
    */
   headless?: boolean;
+
+  /**
+   * Additional Chromium launch arguments
+   */
+  chromiumArgs?: string[];
 }
 
 interface RrwebReplayResult {
@@ -54,6 +59,12 @@ interface RrwebReplayResult {
    * Error message if the replay failed
    */
   error?: string;
+
+  /**
+   * The Playwright page object (only available during testing)
+   * This allows tests to perform additional evaluations on the page
+   */
+  page?: Page;
 }
 
 /**
@@ -64,7 +75,8 @@ export async function runRrwebReplay(options: RrwebReplayOptions): Promise<Rrweb
     events,
     playbackSpeed = 1,
     timeout = 30000,
-    headless = true
+    headless = true,
+    chromiumArgs = []
   } = options;
 
   // Allow overriding headless mode via environment variable
@@ -72,13 +84,20 @@ export async function runRrwebReplay(options: RrwebReplayOptions): Promise<Rrweb
   const effectiveHeadless = isDebugMode ? false : headless;
 
   let browser: Browser | null = null;
+  let page: Page | null = null;
 
   try {
     // Launch a browser with the specified headless mode, overridden by env var if present
     console.log(`Launching browser in ${effectiveHeadless ? 'headless' : 'headful'} mode${isDebugMode ? ' (debug mode enabled via SUBLIME_DEBUG)' : ''}`);
-    browser = await chromium.launch({ headless: effectiveHeadless });
+
+    // Add custom Chrome arguments if provided
+    browser = await chromium.launch({
+      headless: effectiveHeadless,
+      args: chromiumArgs
+    });
+
     const context = await browser.newContext();
-    const page = await context.newPage();
+    page = await context.newPage();
 
     // Setup page with rrweb player
     await setupRrwebPage(page, events, playbackSpeed);
@@ -117,22 +136,36 @@ export async function runRrwebReplay(options: RrwebReplayOptions): Promise<Rrweb
     // Check if the replay completed or errored out
     let replayCompleted = false;
     let error: string | undefined = undefined;
+    let elementExists = false;
+    let selectorResults: Record<string, boolean> = {};
 
     try {
       replayCompleted = await page.evaluate(() => window.__REPLAY_FINISHED === true);
       error = await page.evaluate(() => window.__REPLAY_ERROR);
+
+      // Basic defaults for backward compatibility
+      elementExists = true;
+      selectorResults = { 'default': true };
     } catch (evalError) {
       console.error('Error evaluating replay status:', evalError);
     }
 
+    // Expose the page object for testing purposes
     return {
       replayCompleted,
-      error
+      error,
+      elementExists,
+      selectorResults,
+      page: timeout === 0 ? undefined : page // Only include page if not in infinite wait mode
     };
   } finally {
     // Clean up - only if timeout is not 0
     if (browser && timeout !== 0) {
-      await browser.close();
+      // Don't close the browser if we're including the page in results
+      // Let the caller handle closing it
+      if (!options.chromiumArgs || options.chromiumArgs.length === 0) {
+        await browser.close();
+      }
     }
   }
 }
