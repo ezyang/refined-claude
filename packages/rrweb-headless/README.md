@@ -29,7 +29,7 @@ const result = await runRrwebReplay({
   selectors: ['.my-element']
 });
 
-console.log(result.selectorResults);
+console.log(result.elementExists); // Whether all specified elements exist
 ```
 
 ### Troubleshooting Webpage Rendering
@@ -53,8 +53,8 @@ const result = await runRrwebReplay({
   // other options...
 });
 
-// Check if the elements were found
-console.log(result.selectorResults); // { '.modal-dialog': true, '#submit-button': false }
+// Check if all the elements were found
+console.log(result.elementExists); // true if all elements exist, false otherwise
 
 ### As a CLI debugging tool
 

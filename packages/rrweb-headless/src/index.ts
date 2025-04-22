@@ -46,11 +46,6 @@ interface RrwebReplayResult {
   elementExists: boolean;
 
   /**
-   * Detailed results for each selector
-   */
-  selectorResults: Record<string, boolean>;
-
-  /**
    * Whether the replay completed successfully
    */
   replayCompleted: boolean;
@@ -137,7 +132,6 @@ export async function runRrwebReplay(options: RrwebReplayOptions): Promise<Rrweb
     let replayCompleted = false;
     let error: string | undefined = undefined;
     let elementExists = false;
-    let selectorResults: Record<string, boolean> = {};
 
     try {
       replayCompleted = await page.evaluate(() => window.__REPLAY_FINISHED === true);
@@ -145,7 +139,6 @@ export async function runRrwebReplay(options: RrwebReplayOptions): Promise<Rrweb
 
       // Basic defaults for backward compatibility
       elementExists = true;
-      selectorResults = { 'default': true };
     } catch (evalError) {
       console.error('Error evaluating replay status:', evalError);
     }
@@ -155,7 +148,6 @@ export async function runRrwebReplay(options: RrwebReplayOptions): Promise<Rrweb
       replayCompleted,
       error,
       elementExists,
-      selectorResults,
       page: timeout === 0 ? undefined : page // Only include page if not in infinite wait mode
     };
   } finally {

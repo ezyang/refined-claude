@@ -141,10 +141,6 @@ async function main() {
       }
 
       if (selectors.length > 0) {
-        console.log('Selector results:');
-        Object.entries(result.selectorResults).forEach(([selector, exists]) => {
-          console.log(`  - ${selector}: ${exists ? 'Found ✓' : 'Not found ✗'}`);
-        });
         console.log(`All selectors found: ${result.elementExists ? 'Yes ✓' : 'No ✗'}`);
       }
     }
