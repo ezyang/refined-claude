@@ -5,3 +5,4 @@ project_prompt = '''
 '''
 [commands]
 test = ["pnpm", "turbo", "test"]
+build = ["pnpm", "turbo", "build"]
