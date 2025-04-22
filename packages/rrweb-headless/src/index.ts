@@ -113,6 +113,10 @@ export async function runRrwebReplay(options: RrwebReplayOptions): Promise<Rrweb
  * Sets up the page with rrweb player and injects the events
  */
 async function setupRrwebPage(page: Page, events: eventWithTime[], playbackSpeed: number, selectors: string[] = []): Promise<void> {
+  // Import rrweb from node_modules
+  const rrwebPath = require.resolve('rrweb/dist/rrweb.min.js');
+  const rrwebContent = await fs.readFile(rrwebPath, 'utf-8');
+
   // Create HTML content with rrweb scripts
   const html = `
     <!DOCTYPE html>
@@ -121,7 +125,7 @@ async function setupRrwebPage(page: Page, events: eventWithTime[], playbackSpeed
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>rrweb Replay</title>
-        <script src="https://cdn.jsdelivr.net/npm/rrweb@latest/dist/rrweb.min.js"></script>
+        <script>${rrwebContent}</script>
         <style>
           body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; }
           #replay { width: 100%; height: 100%; }
