@@ -64,7 +64,7 @@ export async function runRrwebHeadless(options: RrwebHeadlessOptions): Promise<R
     const page = await context.newPage();
 
     // Setup page with rrweb player
-    await setupRrwebPage(page, events, playbackSpeed);
+    await setupRrwebPage(page, events, playbackSpeed, selectors);
 
     // Wait for the replay to complete
     const totalDuration = calculateReplayDuration(events);
@@ -102,7 +102,7 @@ export async function runRrwebHeadless(options: RrwebHeadlessOptions): Promise<R
 /**
  * Sets up the page with rrweb player and injects the events
  */
-async function setupRrwebPage(page: Page, events: eventWithTime[], playbackSpeed: number): Promise<void> {
+async function setupRrwebPage(page: Page, events: eventWithTime[], playbackSpeed: number, selectors: string[] = []): Promise<void> {
   // Create HTML content with rrweb scripts
   const html = `
     <!DOCTYPE html>
@@ -234,8 +234,18 @@ async function setupRrwebPage(page: Page, events: eventWithTime[], playbackSpeed
  * Calculate the total duration of the replay in milliseconds
  */
 function calculateReplayDuration(events: eventWithTime[]): number {
+  // Check if events array is valid
+  if (!events || !Array.isArray(events) || events.length === 0) {
+    return 5000; // Default duration if no events
+  }
+
   if (events.length < 2) {
     return 5000; // Default duration if not enough events
+  }
+
+  // Ensure the events have timestamp properties
+  if (!events[0].hasOwnProperty('timestamp') || !events[events.length - 1].hasOwnProperty('timestamp')) {
+    return 5000; // Default duration if events don't have timestamp
   }
 
   const firstEventTime = events[0].timestamp;

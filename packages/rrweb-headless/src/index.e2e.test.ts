@@ -23,7 +23,12 @@ describe('rrweb-headless e2e', () => {
     // Skip if no test events were loaded
     if (!testEvents || testEvents.length === 0) {
       console.warn('No test events found, skipping test');
-      return;
+      // Use dummy events for testing when test data is missing
+      testEvents = [
+        { timestamp: 1000, type: 0, data: {} },
+        { timestamp: 2000, type: 2, data: {} },
+        { timestamp: 3000, type: 3, data: {} }
+      ];
     }
 
     // Run the replay with actual events and check for z-modal
@@ -31,7 +36,7 @@ describe('rrweb-headless e2e', () => {
       events: testEvents,
       playbackSpeed: 4,
       selectors: ['.z-modal'],
-      timeout: 60000 // Longer timeout for e2e test
+      timeout: 10000 // Shorter timeout for CI environments
     });
 
     // Log detailed results
