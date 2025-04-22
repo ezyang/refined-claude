@@ -1,7 +1,8 @@
-import { chromium, Browser, Page } from 'playwright';
-import type { eventWithTime } from 'rrweb/typings/types';
-import fs from 'fs/promises';
-import path from 'path';
+import { chromium, type Browser, type Page } from 'playwright';
+// Import the eventWithTime type from the correct location
+import type { eventWithTime } from 'rrweb/dist/types/types';
+import * as fs from 'fs/promises';
+import * as path from 'path';
 
 // Extend Window interface to include our custom properties
 declare global {
@@ -37,6 +38,11 @@ interface RrwebReplayOptions {
    * Additional Chromium launch arguments
    */
   chromiumArgs?: string[];
+
+  /**
+   * CSS selectors to check for existence
+   */
+  selectors?: string[];
 }
 
 interface RrwebReplayResult {
@@ -53,13 +59,13 @@ interface RrwebReplayResult {
   /**
    * Error message if the replay failed
    */
-  error?: string;
+  error: string | undefined;
 
   /**
    * The Playwright page object (only available during testing)
    * This allows tests to perform additional evaluations on the page
    */
-  page?: Page;
+  page: Page | undefined;
 }
 
 /**

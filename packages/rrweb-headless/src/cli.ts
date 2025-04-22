@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 
-import { runRrwebReplay, loadEventsFromFile } from './index';
-import path from 'path';
-import fs from 'fs/promises';
+import { runRrwebReplay, loadEventsFromFile } from './index.js';
+import * as path from 'path';
+import * as fs from 'fs/promises';
 
 // Parse command line arguments
 const args = process.argv.slice(2);
@@ -32,21 +32,33 @@ function parseArgs() {
     } else if (arg === '--headful') {
       headless = false;
     } else if (arg === '--speed' && i + 1 < args.length) {
-      playbackSpeed = parseFloat(args[++i]);
-      if (isNaN(playbackSpeed) || playbackSpeed <= 0) {
-        playbackSpeed = 1;
+      const nextArg = args[i + 1];
+      if (nextArg) {
+        ++i;
+        playbackSpeed = parseFloat(nextArg);
+        if (isNaN(playbackSpeed) || playbackSpeed <= 0) {
+          playbackSpeed = 1;
+        }
       }
     } else if (arg === '--timeout' && i + 1 < args.length) {
-      timeout = parseInt(args[++i], 10);
-      if (isNaN(timeout) || timeout < 0) {
-        timeout = 0;
+      const nextArg = args[i + 1];
+      if (nextArg) {
+        ++i;
+        timeout = parseInt(nextArg, 10);
+        if (isNaN(timeout) || timeout < 0) {
+          timeout = 0;
+        }
       }
     } else if (arg === '--selector' && i + 1 < args.length) {
-      selectors.push(args[++i]);
+      const nextArg = args[i + 1];
+      if (nextArg) {
+        ++i;
+        selectors.push(nextArg);
+      }
     } else if (arg === '--help' || arg === '-h') {
       printHelp();
       process.exit(0);
-    } else if (!arg.startsWith('--') && jsonFilePath === null) {
+    } else if (arg && !arg.startsWith('--') && jsonFilePath === null) {
       // Assume it's the JSON file path
       jsonFilePath = arg;
     }

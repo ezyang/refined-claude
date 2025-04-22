@@ -15,12 +15,13 @@
     "skipLibCheck": false,
 
     /* Module story: ESM everywhere */
-    "module": "ESNext",
+    "module": "NodeNext",
     "moduleResolution": "NodeNext",
     "target": "ES2022",
     "lib": ["ES2022", "DOM"],
     "resolveJsonModule": true,
     "isolatedModules": true,
+    "allowSyntheticDefaultImports": true,
 
     /* Paths shared across workspace */
     "baseUrl": ".",
