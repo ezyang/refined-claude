@@ -1,6 +1,14 @@
 # rrweb-headless
 
-A tool for running [rrweb](https://github.com/rrweb-io/rrweb) replays in headless or headed browsers using Playwright.
+A tool for running [rrweb](https://github.com/rrweb-io/rrweb) replays in headless or headed browsers using Playwright. This allows you to visualize recorded user sessions with full webpage content and mouse movements.
+
+## Features
+
+- Run rrweb replays headlessly or with a visible browser
+- View complete webpage content alongside mouse movements and interactions
+- Set playback speed for faster analysis
+- Check for the existence of specific elements using CSS selectors
+- Built-in debugging tools and visualizations
 
 ## Usage
 
@@ -16,13 +24,22 @@ const events = await loadEventsFromFile('path/to/events.json');
 const result = await runRrwebReplay({
   events,
   playbackSpeed: 1.5,
-  headless: false,
+  headless: false, // Set to false to see the full replay with webpage content
   timeout: 60000,
   selectors: ['.my-element']
 });
 
 console.log(result.selectorResults);
 ```
+
+### Troubleshooting Webpage Rendering
+
+If you're not seeing the actual webpage content (only mouse movements):
+
+1. Make sure your recording includes full snapshots (DOM captures)
+2. Use `headless: false` to view the replay in a browser window
+3. Check the console logs for warnings about missing snapshots
+4. For debugging, use the CLI tool with `--timeout 0` to keep the browser open
 
 ### As a CLI debugging tool
 

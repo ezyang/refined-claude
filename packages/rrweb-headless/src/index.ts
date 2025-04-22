@@ -148,7 +148,30 @@ async function setupRrwebPage(page: Page, events: eventWithTime[], playbackSpeed
         ${rrwebPlayerCssContent ? `<style>${rrwebPlayerCssContent}</style>` : ''}
         <style>
           body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; }
-          #replay { width: 100%; height: 100%; }
+          #replay {
+            width: 100%;
+            height: 100%;
+            position: relative;
+          }
+          /* Ensure iframes are visible and sized properly */
+          #replay iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+            position: absolute;
+            top: 0;
+            left: 0;
+          }
+          /* Make sure the replayer UI components don't obscure content */
+          .replayer-wrapper {
+            width: 100% !important;
+            height: 100% !important;
+          }
+          /* For the mirror element that shows the content */
+          .replayer-mirror {
+            width: 100% !important;
+            height: 100% !important;
+          }
           #status {
             position: fixed;
             bottom: 10px;
@@ -158,6 +181,7 @@ async function setupRrwebPage(page: Page, events: eventWithTime[], playbackSpeed
             padding: 5px 10px;
             border-radius: 4px;
             font-family: monospace;
+            z-index: 10000;
           }
           #error {
             position: fixed;
@@ -170,6 +194,7 @@ async function setupRrwebPage(page: Page, events: eventWithTime[], playbackSpeed
             text-align: center;
             font-family: sans-serif;
             display: none;
+            z-index: 10000;
           }
           .highlight {
             outline: 2px solid red !important;
@@ -206,7 +231,18 @@ async function setupRrwebPage(page: Page, events: eventWithTime[], playbackSpeed
                 return;
               }
 
-              statusEl.textContent = \`Loaded \${events.length} events\`;
+              // Check if events contain full snapshot
+              const hasFullSnapshot = events.some(event =>
+                event.type === 2 && // Full snapshot type
+                event.data &&
+                event.data.node
+              );
+
+              if (!hasFullSnapshot) {
+                console.warn('Warning: Events do not contain a full snapshot, webpage content may not render properly');
+              }
+
+              statusEl.textContent = 'Loaded ' + events.length + ' events' + (hasFullSnapshot ? ' (snapshot found)' : ' (no snapshot found)');
 
               // Check if rrwebPlayer is available
               if (typeof rrwebPlayer !== 'undefined') {
@@ -215,8 +251,12 @@ async function setupRrwebPage(page: Page, events: eventWithTime[], playbackSpeed
                   target: document.getElementById('replay'),
                   props: {
                     events,
-                    showController: false,
-                    skipInactive: true
+                    showController: true, // Show controller to help with debugging
+                    skipInactive: true,
+                    width: window.innerWidth,
+                    height: window.innerHeight,
+                    // Make sure to enable iframe rendering
+                    useIframe: true // This is crucial for seeing the webpage content
                   }
                 });
 
@@ -231,11 +271,14 @@ async function setupRrwebPage(page: Page, events: eventWithTime[], playbackSpeed
                 replayer = new rrweb.Replayer(events, {
                   root: document.getElementById('replay'),
                   liveMode: false,
-                  showWarning: false,
+                  showWarning: true, // Enable warnings to help debug
                   showDebug: false,
                   blockClass: 'no-record',
                   skipInactive: true,
-                  speed: ${playbackSpeed} // Set speed directly in options
+                  speed: ${playbackSpeed}, // Set speed directly in options
+                  // Make sure to enable iframe rendering
+                  useIframe: true, // This is crucial for seeing the webpage content
+                  mouseTail: true // Show mouse movements
                 });
 
                 statusEl.textContent = \`Playing at \${${playbackSpeed}}x speed...\`;
@@ -244,20 +287,53 @@ async function setupRrwebPage(page: Page, events: eventWithTime[], playbackSpeed
                 replayer.play();
               }
 
+              // Monitor for DOM changes to detect if content is rendered
+              let contentCheckInterval;
+              let contentRendered = false;
+
+              contentCheckInterval = setInterval(() => {
+                // Check for any content in the replay container
+                const replayContainer = document.getElementById('replay');
+
+                // Look for either iframe or mirror content
+                const hasIframe = replayContainer.querySelector('iframe');
+                const hasMirror = replayContainer.querySelector('.replayer-mirror');
+
+                if (hasIframe || hasMirror) {
+                  const contentInIframe = hasIframe &&
+                    (hasIframe.contentDocument &&
+                     hasIframe.contentDocument.body &&
+                     hasIframe.contentDocument.body.childElementCount > 0);
+
+                  const contentInMirror = hasMirror && hasMirror.childElementCount > 0;
+
+                  if (contentInIframe || contentInMirror) {
+                    contentRendered = true;
+                    console.log('Content successfully rendered');
+                    statusEl.style.backgroundColor = 'rgba(0,128,0,0.7)';
+                    clearInterval(contentCheckInterval);
+                  }
+                }
+
+                // If no content after 5 seconds, show warning
+                if (!contentRendered && window.performance.now() > 5000) {
+                  console.warn('No content detected in replayer. Check if events contain full snapshot.');
+                  statusEl.style.backgroundColor = 'rgba(255,127,0,0.7)';
+                }
+              }, 1000);
+
               // Display timing info - works with both player types
               setInterval(() => {
                 let currentTime, totalTime;
 
                 if (typeof rrwebPlayer !== 'undefined' && replayer) {
                   // For rrweb-player we need to get time differently
-                  // (this is simplified - in real implementation you would need event listeners)
                   // Use first/last event timestamps as an approximation
                   const firstTimestamp = events[0].timestamp;
                   const lastTimestamp = events[events.length - 1].timestamp;
                   totalTime = lastTimestamp - firstTimestamp;
 
                   // Here we're approximating current time based on when replay started
-                  // In a real implementation, you'd use the ui-update-current-time event
                   const replayStartTime = window.performance.now() - (window.performance.now() % 500);
                   const elapsedTime = (window.performance.now() - replayStartTime) * ${playbackSpeed};
                   currentTime = Math.min(elapsedTime, totalTime);
@@ -269,7 +345,8 @@ async function setupRrwebPage(page: Page, events: eventWithTime[], playbackSpeed
 
                 if (currentTime !== undefined && totalTime !== undefined) {
                   const progress = Math.round((currentTime / totalTime) * 100);
-                  statusEl.textContent = \`Replay: \${progress}% (\${Math.floor(currentTime / 1000)}s / \${Math.floor(totalTime / 1000)}s)\`;
+                  const currentStatusText = statusEl.textContent.split(' - ')[0];
+                  statusEl.textContent = currentStatusText + ' - Replay: ' + progress + '% (' + Math.floor(currentTime / 1000) + 's / ' + Math.floor(totalTime / 1000) + 's)';
                 }
               }, 500);
 
