@@ -30,5 +30,11 @@ describe('rrweb-headless e2e', () => {
     expect(result).toBeDefined();
     expect(typeof result.elementExists).toBe('boolean');
     expect(Object.keys(result.selectorResults)).toContain('.z-modal');
+
+    // Check the new fields
+    expect(typeof result.replayCompleted).toBe('boolean');
+    if (result.error) {
+      console.error('Replay error:', result.error);
+    }
   }, 30_000);
 });

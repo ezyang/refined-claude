@@ -3,6 +3,14 @@ import type { eventWithTime } from 'rrweb/typings/types';
 import fs from 'fs/promises';
 import path from 'path';
 
+// Extend Window interface to include our custom properties
+declare global {
+  interface Window {
+    __REPLAY_FINISHED?: boolean;
+    __REPLAY_ERROR?: string;
+  }
+}
+
 interface RrwebReplayOptions {
   /**
    * The rrweb events to replay
@@ -41,6 +49,16 @@ interface RrwebReplayResult {
    * Detailed results for each selector
    */
   selectorResults: Record<string, boolean>;
+
+  /**
+   * Whether the replay completed successfully
+   */
+  replayCompleted: boolean;
+
+  /**
+   * Error message if the replay failed
+   */
+  error?: string;
 }
 
 /**
@@ -67,10 +85,6 @@ export async function runRrwebReplay(options: RrwebReplayOptions): Promise<Rrweb
     // Setup page with rrweb player
     await setupRrwebPage(page, events, playbackSpeed, selectors);
 
-    // Wait for the replay to complete
-    const totalDuration = calculateReplayDuration(events);
-    const waitTime = Math.ceil(totalDuration / playbackSpeed);
-
     // If timeout is 0, we don't close the browser automatically
     if (timeout === 0) {
       console.log('Browser will remain open (timeout=0). Press Ctrl+C to exit.');
@@ -79,9 +93,38 @@ export async function runRrwebReplay(options: RrwebReplayOptions): Promise<Rrweb
       // Note: This will keep the process running
       await new Promise(() => {});
     } else {
-      // Cap the wait time to the provided timeout
-      const effectiveWaitTime = Math.min(waitTime, timeout);
-      await page.waitForTimeout(effectiveWaitTime);
+      // Wait for replay to complete or timeout
+      try {
+        // Wait for the replay finished flag to be set with a maximum timeout
+        await Promise.race([
+          page.waitForFunction(() => window.__REPLAY_FINISHED === true, { timeout }),
+          page.waitForFunction(() => window.__REPLAY_ERROR !== undefined, { timeout })
+        ]);
+
+        // Check if there was an error
+        const replayError = await page.evaluate(() => window.__REPLAY_ERROR);
+        if (replayError) {
+          throw new Error(`Replay error: ${replayError}`);
+        }
+      } catch (err) {
+        // If the timeout was reached without the flag being set
+        if ((err as Error).message.includes('Timeout')) {
+          console.warn(`Replay did not complete within the specified timeout (${timeout}ms)`);
+        } else {
+          throw err;
+        }
+      }
+    }
+
+    // Check if the replay completed or errored out
+    let replayCompleted = false;
+    let error: string | undefined = undefined;
+
+    try {
+      replayCompleted = await page.evaluate(() => window.__REPLAY_FINISHED === true);
+      error = await page.evaluate(() => window.__REPLAY_ERROR);
+    } catch (evalError) {
+      console.error('Error evaluating replay status:', evalError);
     }
 
     // Check for the existence of the specified selectors
@@ -108,7 +151,9 @@ export async function runRrwebReplay(options: RrwebReplayOptions): Promise<Rrweb
 
     return {
       elementExists,
-      selectorResults
+      selectorResults,
+      replayCompleted,
+      error
     };
   } finally {
     // Clean up - only if timeout is not 0
@@ -234,11 +279,17 @@ async function setupRrwebPage(page: Page, events: eventWithTime[], playbackSpeed
             console.error(message);
           }
 
+          // Initialize global flags for replay status
+          window.__REPLAY_FINISHED = false;
+          window.__REPLAY_ERROR = undefined;
+
           // Initialize replayer when page loads
           window.addEventListener('DOMContentLoaded', () => {
             try {
               if (!events || !events.length) {
-                showError('No events provided');
+                const errorMsg = 'No events provided';
+                showError(errorMsg);
+                window.__REPLAY_ERROR = errorMsg;
                 return;
               }
 
@@ -328,13 +379,20 @@ async function setupRrwebPage(page: Page, events: eventWithTime[], playbackSpeed
 
                 // If no content after 5 seconds, show warning
                 if (!contentRendered && window.performance.now() > 5000) {
-                  console.warn('No content detected in replayer. Check if events contain full snapshot.');
+                  const warningMsg = 'No content detected in replayer. Check if events contain full snapshot.';
+                  console.warn(warningMsg);
                   statusEl.style.backgroundColor = 'rgba(255,127,0,0.7)';
+
+                  // If still no content after 10 seconds, consider it an error
+                  if (window.performance.now() > 10000 && !contentRendered) {
+                    window.__REPLAY_ERROR = 'Failed to render content: ' + warningMsg;
+                    clearInterval(contentCheckInterval);
+                  }
                 }
               }, 1000);
 
               // Display timing info - works with both player types
-              setInterval(() => {
+              let progressInterval = setInterval(() => {
                 let currentTime, totalTime;
 
                 if (typeof rrwebPlayer !== 'undefined' && replayer) {
@@ -358,6 +416,14 @@ async function setupRrwebPage(page: Page, events: eventWithTime[], playbackSpeed
                   const progress = Math.round((currentTime / totalTime) * 100);
                   const currentStatusText = statusEl.textContent.split(' - ')[0];
                   statusEl.textContent = currentStatusText + ' - Replay: ' + progress + '% (' + Math.floor(currentTime / 1000) + 's / ' + Math.floor(totalTime / 1000) + 's)';
+
+                  // Check if replay is complete
+                  if (progress >= 100) {
+                    window.__REPLAY_FINISHED = true;
+                    clearInterval(progressInterval);
+                    statusEl.textContent += ' - COMPLETE';
+                    console.log('Replay completed');
+                  }
                 }
               }, 500);
 
@@ -385,11 +451,16 @@ async function setupRrwebPage(page: Page, events: eventWithTime[], playbackSpeed
                     statusEl.textContent = \`Found \${elements.length} matches for \${selector}\`;
                   });
                 }
+
+                // Mark replay as finished if not already marked
+                window.__REPLAY_FINISHED = true;
               }, replayDuration / ${playbackSpeed} + 1000);
 
             } catch (err) {
-              showError('Error initializing replayer: ' + err.message);
+              const errorMsg = 'Error initializing replayer: ' + err.message;
+              showError(errorMsg);
               console.error(err);
+              window.__REPLAY_ERROR = errorMsg;
             }
           });
         </script>
@@ -409,6 +480,8 @@ async function setupRrwebPage(page: Page, events: eventWithTime[], playbackSpeed
 
 /**
  * Calculate the total duration of the replay in milliseconds
+ * Note: This is primarily used for internal calculations and timeouts,
+ * not for determining when the replay is actually finished.
  */
 function calculateReplayDuration(events: eventWithTime[]): number {
   // Check if events array is valid

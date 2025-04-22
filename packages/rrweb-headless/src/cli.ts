@@ -131,7 +131,14 @@ async function main() {
 
     // When timeout is 0, this code won't be reached until the process is killed
     if (timeout !== 0) {
-      console.log('\nReplay completed!');
+      if (result.error) {
+        console.error('\nReplay encountered an error:', result.error);
+        process.exit(1);
+      } else if (result.replayCompleted) {
+        console.log('\nReplay completed successfully! ✓');
+      } else {
+        console.warn('\nReplay may not have fully completed before timeout.');
+      }
 
       if (selectors.length > 0) {
         console.log('Selector results:');
