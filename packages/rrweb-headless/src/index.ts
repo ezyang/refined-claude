@@ -193,7 +193,223 @@ async function setupRrwebPage(page: Page, events: eventWithTime[], playbackSpeed
     console.warn('rrweb-player not found, using basic replayer');
   }
 
-  // Create HTML content with rrweb scripts
+  // CSS styles for the replay page
+  const styles = `
+    body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; }
+    #replay { width: 100%; height: 100%; position: relative; }
+    #replay iframe { width: 100%; height: 100%; border: none; position: absolute; top: 0; left: 0; }
+    .replayer-wrapper { width: 100% !important; height: 100% !important; }
+    .replayer-mirror { width: 100% !important; height: 100% !important; }
+    #status { position: fixed; bottom: 10px; right: 10px; background: rgba(0,0,0,0.7); color: white;
+              padding: 5px 10px; border-radius: 4px; font-family: monospace; z-index: 10000; }
+    #error { position: fixed; top: 0; left: 0; right: 0; background: #ff5252; color: white;
+             padding: 10px; text-align: center; font-family: sans-serif; display: none; z-index: 10000; }
+    .highlight { outline: 2px solid red !important; outline-offset: 2px !important;
+                 background-color: rgba(255, 0, 0, 0.2) !important; z-index: 10000 !important; position: relative !important; }
+  `;
+
+  // JavaScript for replay functionality
+  const script = `
+    // Will be replaced with actual events
+    const events = [];
+    let replayer;
+
+    // Status tracking
+    const statusEl = document.getElementById('status');
+    const errorEl = document.getElementById('error');
+
+    // Display error message
+    function showError(message) {
+      errorEl.textContent = message;
+      errorEl.style.display = 'block';
+      console.error(message);
+    }
+
+    // Initialize global flags for replay status
+    window.__REPLAY_FINISHED = false;
+    window.__REPLAY_ERROR = undefined;
+
+    // Initialize replayer when page loads
+    window.addEventListener('DOMContentLoaded', () => {
+      try {
+        if (!events || !events.length) {
+          const errorMsg = 'No events provided';
+          showError(errorMsg);
+          window.__REPLAY_ERROR = errorMsg;
+          return;
+        }
+
+        // Check if events contain full snapshot
+        const hasFullSnapshot = events.some(event =>
+          event.type === 2 && // Full snapshot type
+          event.data &&
+          event.data.node
+        );
+
+        if (!hasFullSnapshot) {
+          console.warn('Warning: Events do not contain a full snapshot, webpage content may not render properly');
+        }
+
+        statusEl.textContent = 'Loaded ' + events.length + ' events' + (hasFullSnapshot ? ' (snapshot found)' : ' (no snapshot found)');
+
+        // Check if rrwebPlayer is available
+        if (typeof rrwebPlayer !== 'undefined') {
+          // Use rrweb-player
+          replayer = new rrwebPlayer({
+            target: document.getElementById('replay'),
+            props: {
+              events,
+              showController: true, // Show controller to help with debugging
+              skipInactive: true,
+              width: window.innerWidth,
+              height: window.innerHeight,
+              useIframe: true // This is crucial for seeing the webpage content
+            }
+          });
+
+          // Set playback speed
+          replayer.setSpeed(${playbackSpeed});
+          statusEl.textContent = \`Playing at \${${playbackSpeed}}x speed...\`;
+
+          // Start playback
+          replayer.play();
+        } else {
+          // Fallback to basic rrweb replayer
+          replayer = new rrweb.Replayer(events, {
+            root: document.getElementById('replay'),
+            liveMode: false,
+            showWarning: true, // Enable warnings to help debug
+            showDebug: false,
+            blockClass: 'no-record',
+            skipInactive: true,
+            speed: ${playbackSpeed}, // Set speed directly in options
+            useIframe: true, // This is crucial for seeing the webpage content
+            mouseTail: true // Show mouse movements
+          });
+
+          statusEl.textContent = \`Playing at \${${playbackSpeed}}x speed...\`;
+
+          // Start playback
+          replayer.play();
+        }
+
+        // Monitor for DOM changes to detect if content is rendered
+        let contentCheckInterval;
+        let contentRendered = false;
+
+        contentCheckInterval = setInterval(() => {
+          // Check for any content in the replay container
+          const replayContainer = document.getElementById('replay');
+
+          // Look for either iframe or mirror content
+          const hasIframe = replayContainer.querySelector('iframe');
+          const hasMirror = replayContainer.querySelector('.replayer-mirror');
+
+          if (hasIframe || hasMirror) {
+            const contentInIframe = hasIframe &&
+              (hasIframe.contentDocument &&
+               hasIframe.contentDocument.body &&
+               hasIframe.contentDocument.body.childElementCount > 0);
+
+            const contentInMirror = hasMirror && hasMirror.childElementCount > 0;
+
+            if (contentInIframe || contentInMirror) {
+              contentRendered = true;
+              console.log('Content successfully rendered');
+              statusEl.style.backgroundColor = 'rgba(0,128,0,0.7)';
+              clearInterval(contentCheckInterval);
+            }
+          }
+
+          // If no content after 5 seconds, show warning
+          if (!contentRendered && window.performance.now() > 5000) {
+            const warningMsg = 'No content detected in replayer. Check if events contain full snapshot.';
+            console.warn(warningMsg);
+            statusEl.style.backgroundColor = 'rgba(255,127,0,0.7)';
+
+            // If still no content after 10 seconds, consider it an error
+            if (window.performance.now() > 10000 && !contentRendered) {
+              window.__REPLAY_ERROR = 'Failed to render content: ' + warningMsg;
+              clearInterval(contentCheckInterval);
+            }
+          }
+        }, 1000);
+
+        // Display timing info - works with both player types
+        let progressInterval = setInterval(() => {
+          let currentTime, totalTime;
+
+          if (typeof rrwebPlayer !== 'undefined' && replayer) {
+            // For rrweb-player we need to get time differently
+            // Use first/last event timestamps as an approximation
+            const firstTimestamp = events[0].timestamp;
+            const lastTimestamp = events[events.length - 1].timestamp;
+            totalTime = lastTimestamp - firstTimestamp;
+
+            // Here we're approximating current time based on when replay started
+            const replayStartTime = window.performance.now() - (window.performance.now() % 500);
+            const elapsedTime = (window.performance.now() - replayStartTime) * ${playbackSpeed};
+            currentTime = Math.min(elapsedTime, totalTime);
+          } else if (replayer) {
+            // For basic replayer
+            currentTime = replayer.getCurrentTime();
+            totalTime = replayer.getMetaData().totalTime;
+          }
+
+          if (currentTime !== undefined && totalTime !== undefined) {
+            const progress = Math.round((currentTime / totalTime) * 100);
+            const currentStatusText = statusEl.textContent.split(' - ')[0];
+            statusEl.textContent = currentStatusText + ' - Replay: ' + progress + '% (' + Math.floor(currentTime / 1000) + 's / ' + Math.floor(totalTime / 1000) + 's)';
+
+            // Check if replay is complete
+            if (progress >= 100) {
+              window.__REPLAY_FINISHED = true;
+              clearInterval(progressInterval);
+              statusEl.textContent += ' - COMPLETE';
+              console.log('Replay completed');
+            }
+          }
+        }, 500);
+
+        // When replay finishes, highlight any selectors that match
+        const replayDuration = events[events.length - 1].timestamp - events[0].timestamp;
+        setTimeout(() => {
+          const selectors = ${JSON.stringify(selectors || [])};
+          if (selectors && selectors.length) {
+            selectors.forEach(selector => {
+              // Look for the iframe that rrweb-replay creates
+              const iframe = document.querySelector('#replay iframe');
+              let elements = [];
+
+              // If iframe exists, search within its document
+              if (iframe && iframe.contentDocument) {
+                elements = iframe.contentDocument.querySelectorAll(selector);
+                // Add highlight class to elements inside iframe
+                elements.forEach(el => el.classList.add('highlight'));
+              } else {
+                // Fallback to the main document if iframe not found
+                elements = document.querySelectorAll(selector);
+                elements.forEach(el => el.classList.add('highlight'));
+              }
+
+              statusEl.textContent = \`Found \${elements.length} matches for \${selector}\`;
+            });
+          }
+
+          // Mark replay as finished if not already marked
+          window.__REPLAY_FINISHED = true;
+        }, replayDuration / ${playbackSpeed} + 1000);
+
+      } catch (err) {
+        const errorMsg = 'Error initializing replayer: ' + err.message;
+        showError(errorMsg);
+        console.error(err);
+        window.__REPLAY_ERROR = errorMsg;
+      }
+    });
+  `;
+
+  // Create a more concise HTML template
   const html = `
     <!DOCTYPE html>
     <html>
@@ -204,270 +420,13 @@ async function setupRrwebPage(page: Page, events: eventWithTime[], playbackSpeed
         <script>${rrwebContent}</script>
         ${rrwebPlayerContent ? `<script>${rrwebPlayerContent}</script>` : ''}
         ${rrwebPlayerCssContent ? `<style>${rrwebPlayerCssContent}</style>` : ''}
-        <style>
-          body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; }
-          #replay {
-            width: 100%;
-            height: 100%;
-            position: relative;
-          }
-          /* Ensure iframes are visible and sized properly */
-          #replay iframe {
-            width: 100%;
-            height: 100%;
-            border: none;
-            position: absolute;
-            top: 0;
-            left: 0;
-          }
-          /* Make sure the replayer UI components don't obscure content */
-          .replayer-wrapper {
-            width: 100% !important;
-            height: 100% !important;
-          }
-          /* For the mirror element that shows the content */
-          .replayer-mirror {
-            width: 100% !important;
-            height: 100% !important;
-          }
-          #status {
-            position: fixed;
-            bottom: 10px;
-            right: 10px;
-            background: rgba(0,0,0,0.7);
-            color: white;
-            padding: 5px 10px;
-            border-radius: 4px;
-            font-family: monospace;
-            z-index: 10000;
-          }
-          #error {
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            background: #ff5252;
-            color: white;
-            padding: 10px;
-            text-align: center;
-            font-family: sans-serif;
-            display: none;
-            z-index: 10000;
-          }
-          .highlight {
-            outline: 2px solid red !important;
-            outline-offset: 2px !important;
-            background-color: rgba(255, 0, 0, 0.2) !important;
-            z-index: 10000 !important;
-            position: relative !important;
-          }
-        </style>
+        <style>${styles}</style>
       </head>
       <body>
         <div id="replay"></div>
         <div id="status">Loading...</div>
         <div id="error"></div>
-        <script>
-          // Will be replaced with actual events
-          const events = [];
-          let replayer;
-
-          // Status tracking
-          const statusEl = document.getElementById('status');
-          const errorEl = document.getElementById('error');
-
-          // Display error message
-          function showError(message) {
-            errorEl.textContent = message;
-            errorEl.style.display = 'block';
-            console.error(message);
-          }
-
-          // Initialize global flags for replay status
-          window.__REPLAY_FINISHED = false;
-          window.__REPLAY_ERROR = undefined;
-
-          // Initialize replayer when page loads
-          window.addEventListener('DOMContentLoaded', () => {
-            try {
-              if (!events || !events.length) {
-                const errorMsg = 'No events provided';
-                showError(errorMsg);
-                window.__REPLAY_ERROR = errorMsg;
-                return;
-              }
-
-              // Check if events contain full snapshot
-              const hasFullSnapshot = events.some(event =>
-                event.type === 2 && // Full snapshot type
-                event.data &&
-                event.data.node
-              );
-
-              if (!hasFullSnapshot) {
-                console.warn('Warning: Events do not contain a full snapshot, webpage content may not render properly');
-              }
-
-              statusEl.textContent = 'Loaded ' + events.length + ' events' + (hasFullSnapshot ? ' (snapshot found)' : ' (no snapshot found)');
-
-              // Check if rrwebPlayer is available
-              if (typeof rrwebPlayer !== 'undefined') {
-                // Use rrweb-player
-                replayer = new rrwebPlayer({
-                  target: document.getElementById('replay'),
-                  props: {
-                    events,
-                    showController: true, // Show controller to help with debugging
-                    skipInactive: true,
-                    width: window.innerWidth,
-                    height: window.innerHeight,
-                    // Make sure to enable iframe rendering
-                    useIframe: true // This is crucial for seeing the webpage content
-                  }
-                });
-
-                // Set playback speed
-                replayer.setSpeed(${playbackSpeed});
-                statusEl.textContent = \`Playing at \${${playbackSpeed}}x speed...\`;
-
-                // Start playback
-                replayer.play();
-              } else {
-                // Fallback to basic rrweb replayer
-                replayer = new rrweb.Replayer(events, {
-                  root: document.getElementById('replay'),
-                  liveMode: false,
-                  showWarning: true, // Enable warnings to help debug
-                  showDebug: false,
-                  blockClass: 'no-record',
-                  skipInactive: true,
-                  speed: ${playbackSpeed}, // Set speed directly in options
-                  // Make sure to enable iframe rendering
-                  useIframe: true, // This is crucial for seeing the webpage content
-                  mouseTail: true // Show mouse movements
-                });
-
-                statusEl.textContent = \`Playing at \${${playbackSpeed}}x speed...\`;
-
-                // Start playback
-                replayer.play();
-              }
-
-              // Monitor for DOM changes to detect if content is rendered
-              let contentCheckInterval;
-              let contentRendered = false;
-
-              contentCheckInterval = setInterval(() => {
-                // Check for any content in the replay container
-                const replayContainer = document.getElementById('replay');
-
-                // Look for either iframe or mirror content
-                const hasIframe = replayContainer.querySelector('iframe');
-                const hasMirror = replayContainer.querySelector('.replayer-mirror');
-
-                if (hasIframe || hasMirror) {
-                  const contentInIframe = hasIframe &&
-                    (hasIframe.contentDocument &&
-                     hasIframe.contentDocument.body &&
-                     hasIframe.contentDocument.body.childElementCount > 0);
-
-                  const contentInMirror = hasMirror && hasMirror.childElementCount > 0;
-
-                  if (contentInIframe || contentInMirror) {
-                    contentRendered = true;
-                    console.log('Content successfully rendered');
-                    statusEl.style.backgroundColor = 'rgba(0,128,0,0.7)';
-                    clearInterval(contentCheckInterval);
-                  }
-                }
-
-                // If no content after 5 seconds, show warning
-                if (!contentRendered && window.performance.now() > 5000) {
-                  const warningMsg = 'No content detected in replayer. Check if events contain full snapshot.';
-                  console.warn(warningMsg);
-                  statusEl.style.backgroundColor = 'rgba(255,127,0,0.7)';
-
-                  // If still no content after 10 seconds, consider it an error
-                  if (window.performance.now() > 10000 && !contentRendered) {
-                    window.__REPLAY_ERROR = 'Failed to render content: ' + warningMsg;
-                    clearInterval(contentCheckInterval);
-                  }
-                }
-              }, 1000);
-
-              // Display timing info - works with both player types
-              let progressInterval = setInterval(() => {
-                let currentTime, totalTime;
-
-                if (typeof rrwebPlayer !== 'undefined' && replayer) {
-                  // For rrweb-player we need to get time differently
-                  // Use first/last event timestamps as an approximation
-                  const firstTimestamp = events[0].timestamp;
-                  const lastTimestamp = events[events.length - 1].timestamp;
-                  totalTime = lastTimestamp - firstTimestamp;
-
-                  // Here we're approximating current time based on when replay started
-                  const replayStartTime = window.performance.now() - (window.performance.now() % 500);
-                  const elapsedTime = (window.performance.now() - replayStartTime) * ${playbackSpeed};
-                  currentTime = Math.min(elapsedTime, totalTime);
-                } else if (replayer) {
-                  // For basic replayer
-                  currentTime = replayer.getCurrentTime();
-                  totalTime = replayer.getMetaData().totalTime;
-                }
-
-                if (currentTime !== undefined && totalTime !== undefined) {
-                  const progress = Math.round((currentTime / totalTime) * 100);
-                  const currentStatusText = statusEl.textContent.split(' - ')[0];
-                  statusEl.textContent = currentStatusText + ' - Replay: ' + progress + '% (' + Math.floor(currentTime / 1000) + 's / ' + Math.floor(totalTime / 1000) + 's)';
-
-                  // Check if replay is complete
-                  if (progress >= 100) {
-                    window.__REPLAY_FINISHED = true;
-                    clearInterval(progressInterval);
-                    statusEl.textContent += ' - COMPLETE';
-                    console.log('Replay completed');
-                  }
-                }
-              }, 500);
-
-              // When replay finishes, highlight any selectors that match
-              const replayDuration = events[events.length - 1].timestamp - events[0].timestamp;
-              setTimeout(() => {
-                const selectors = ${JSON.stringify(selectors || [])};
-                if (selectors && selectors.length) {
-                  selectors.forEach(selector => {
-                    // Look for the iframe that rrweb-replay creates
-                    const iframe = document.querySelector('#replay iframe');
-                    let elements = [];
-
-                    // If iframe exists, search within its document
-                    if (iframe && iframe.contentDocument) {
-                      elements = iframe.contentDocument.querySelectorAll(selector);
-                      // Add highlight class to elements inside iframe
-                      elements.forEach(el => el.classList.add('highlight'));
-                    } else {
-                      // Fallback to the main document if iframe not found
-                      elements = document.querySelectorAll(selector);
-                      elements.forEach(el => el.classList.add('highlight'));
-                    }
-
-                    statusEl.textContent = \`Found \${elements.length} matches for \${selector}\`;
-                  });
-                }
-
-                // Mark replay as finished if not already marked
-                window.__REPLAY_FINISHED = true;
-              }, replayDuration / ${playbackSpeed} + 1000);
-
-            } catch (err) {
-              const errorMsg = 'Error initializing replayer: ' + err.message;
-              showError(errorMsg);
-              console.error(err);
-              window.__REPLAY_ERROR = errorMsg;
-            }
-          });
-        </script>
+        <script>${script}</script>
       </body>
     </html>
   `;
