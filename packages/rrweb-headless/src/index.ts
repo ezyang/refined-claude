@@ -51,7 +51,7 @@ export async function runRrwebHeadless(options: RrwebHeadlessOptions): Promise<R
     playbackSpeed = 1,
     selectors = [],
     timeout = 30000,
-    headless = true
+    headless = false  // TODO: set back to true
   } = options;
 
   let browser: Browser | null = null;
@@ -260,22 +260,4 @@ function calculateReplayDuration(events: eventWithTime[]): number {
 export async function loadEventsFromFile(filePath: string): Promise<eventWithTime[]> {
   const content = await fs.readFile(filePath, 'utf-8');
   return JSON.parse(content);
-}
-
-/**
- * Utility function to run a replay on the test data file
- */
-export async function runTestData(
-  testDataPath: string = '../../testdata/approve-tool.json',
-  options: Partial<Omit<RrwebHeadlessOptions, 'events'>> = {}
-): Promise<RrwebHeadlessResult> {
-  const resolvedPath = path.resolve(__dirname, testDataPath);
-  const events = await loadEventsFromFile(resolvedPath);
-
-  return runRrwebHeadless({
-    events,
-    playbackSpeed: 4,
-    selectors: ['.z-modal'],
-    ...options
-  });
 }

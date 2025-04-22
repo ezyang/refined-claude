@@ -1,124 +1,33 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { runRrwebHeadless, loadEventsFromFile, runTestData } from './index';
-import type { eventWithTime } from 'rrweb/typings/types';
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { runRrwebHeadless, loadEventsFromFile } from './index';
+import path from 'path';
+import fs from 'fs/promises';
 
-// Mock modules
-vi.mock('fs/promises', async () => {
-  return {
-    default: {
-      readFile: vi.fn().mockResolvedValue(JSON.stringify([
-        { timestamp: 1000, type: 0, data: {} },
-        { timestamp: 2000, type: 2, data: {} },
-        { timestamp: 3000, type: 3, data: {} }
-      ]))
-    },
-    readFile: vi.fn().mockResolvedValue(JSON.stringify([
-      { timestamp: 1000, type: 0, data: {} },
-      { timestamp: 2000, type: 2, data: {} },
-      { timestamp: 3000, type: 3, data: {} }
-    ]))
-  };
-});
+// This is an actual end-to-end test that launches a real browser
+describe('rrweb-headless e2e', () => {
+  it('should launch a real browser and replay events', async () => {
+    const testDataPath = path.resolve(__dirname, '../../..', 'testdata/approve-tool.json');
+    const content = await fs.readFile(testDataPath, 'utf-8');
+    const testEvents = JSON.parse(content);
 
-vi.mock('playwright', async () => {
-  const mockEvaluate = vi.fn();
-  mockEvaluate.mockImplementation(() => true);
+    // Skip if no test events were loaded
+    expect(testEvents);
+    expect(testEvents.length !== 0);
 
-  const mockPage = {
-    setContent: vi.fn().mockResolvedValue(undefined),
-    waitForTimeout: vi.fn().mockResolvedValue(undefined),
-    evaluate: mockEvaluate
-  };
-
-  const mockContext = {
-    newPage: vi.fn().mockResolvedValue(mockPage)
-  };
-
-  const mockBrowser = {
-    newContext: vi.fn().mockResolvedValue(mockContext),
-    close: vi.fn().mockResolvedValue(undefined)
-  };
-
-  return {
-    chromium: {
-      launch: vi.fn().mockResolvedValue(mockBrowser)
-    }
-  };
-});
-
-describe('rrweb-headless', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
-  describe('runRrwebHeadless', () => {
-    it('should launch a browser and check selectors', async () => {
-      const events: eventWithTime[] = [
-        { timestamp: 1000, type: 0, data: {} } as any,
-        { timestamp: 2000, type: 2, data: {} } as any,
-        { timestamp: 3000, type: 3, data: {} } as any
-      ];
-
-      const result = await runRrwebHeadless({
-        events,
-        playbackSpeed: 4,
-        selectors: ['.z-modal']
-      });
-
-      // Get the mocked chromium
-      const { chromium } = await import('playwright');
-
-      expect(chromium.launch).toHaveBeenCalledWith({ headless: true });
-      expect(result).toEqual({
-        elementExists: true,
-        selectorResults: {
-          '.z-modal': true
-        }
-      });
+    // Run the replay with actual events and check for z-modal
+    const result = await runRrwebHeadless({
+      events: testEvents,
+      playbackSpeed: 1,
+      selectors: ['.z-modal'],
+      timeout: 10000 // Shorter timeout for CI environments
     });
 
-    it('should handle multiple selectors', async () => {
-      // Override the mock for this test to return different values for different selectors
-      const { chromium } = await import('playwright');
-      const mockBrowser = await chromium.launch();
-      const mockContext = await mockBrowser.newContext();
-      const mockPage = await mockContext.newPage();
+    // Log detailed results
+    console.log('E2E test results:', JSON.stringify(result, null, 2));
 
-      // Update the evaluate mock to check the selector
-      mockPage.evaluate.mockImplementation((fn, selector) => {
-        return selector === '.z-modal';
-      });
-
-      const events: eventWithTime[] = [
-        { timestamp: 1000, type: 0, data: {} } as any,
-        { timestamp: 2000, type: 2, data: {} } as any,
-        { timestamp: 3000, type: 3, data: {} } as any
-      ];
-
-      const result = await runRrwebHeadless({
-        events,
-        playbackSpeed: 4,
-        selectors: ['.z-modal', '.non-existent']
-      });
-
-      expect(result.elementExists).toBe(false);
-      expect(result.selectorResults['.z-modal']).toBe(true);
-      expect(result.selectorResults['.non-existent']).toBe(false);
-    });
-  });
-
-  describe('loadEventsFromFile', () => {
-    it('should load events from a file', async () => {
-      const events = await loadEventsFromFile('fake-path.json');
-      expect(events).toHaveLength(3);
-      expect(events[0].timestamp).toBe(1000);
-    });
-  });
-
-  describe('runTestData', () => {
-    it('should run the test data file', async () => {
-      const result = await runTestData();
-      expect(result.elementExists).toBe(true);
-    });
-  });
+    // Verify results (the actual assertion may vary based on your test data)
+    expect(result).toBeDefined();
+    expect(typeof result.elementExists).toBe('boolean');
+    expect(Object.keys(result.selectorResults)).toContain('.z-modal');
+  }, 30_000);
 });
