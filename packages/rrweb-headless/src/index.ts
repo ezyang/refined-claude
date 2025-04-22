@@ -97,9 +97,9 @@ export async function runRrwebReplay(options: RrwebReplayOptions): Promise<Rrweb
     // Setup page with rrweb player
     await setupRrwebPage(page, events, playbackSpeed);
 
-    // If timeout is 0, we don't close the browser automatically
-    if (timeout === 0) {
-      console.log('Browser will remain open (timeout=0). Press Ctrl+C to exit.');
+    // If timeout is 0 or debug mode is on, we don't close the browser automatically
+    if (timeout === 0 || isDebugMode) {
+      console.log(`Browser will remain open ${isDebugMode ? '(debug mode)' : '(timeout=0)'}. Press Ctrl+C to exit.`);
 
       // Wait indefinitely (until the process is killed)
       // Note: This will keep the process running
@@ -148,11 +148,11 @@ export async function runRrwebReplay(options: RrwebReplayOptions): Promise<Rrweb
       replayCompleted,
       error,
       elementExists,
-      page: timeout === 0 ? undefined : page // Only include page if not in infinite wait mode
+      page: (timeout === 0 || isDebugMode) ? undefined : page // Only include page if not in infinite wait mode or debug mode
     };
   } finally {
-    // Clean up - only if timeout is not 0
-    if (browser && timeout !== 0) {
+    // Clean up - only if timeout is not 0 and debug mode is off
+    if (browser && timeout !== 0 && !isDebugMode) {
       // Don't close the browser if we're including the page in results
       // Let the caller handle closing it
       if (!options.chromiumArgs || options.chromiumArgs.length === 0) {

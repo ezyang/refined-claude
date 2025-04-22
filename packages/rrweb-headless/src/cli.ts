@@ -99,10 +99,11 @@ async function main() {
     process.exit(1);
   }
 
+  const isDebugMode = process.env.SUBLIME_DEBUG === '1';
   console.log(`Loading events from: ${resolvedPath}`);
-  console.log(`Mode: ${headless ? 'headless' : 'headful'}`);
+  console.log(`Mode: ${headless ? 'headless' : 'headful'}${isDebugMode ? ' (debug mode)' : ''}`);
   console.log(`Playback speed: ${playbackSpeed}x`);
-  console.log(`Timeout: ${timeout === 0 ? 'none (browser will stay open)' : timeout + 'ms'}`);
+  console.log(`Timeout: ${timeout === 0 || isDebugMode ? 'none (browser will stay open)' : timeout + 'ms'}`);
 
   if (selectors.length > 0) {
     console.log('Checking for selectors:');
@@ -129,8 +130,8 @@ async function main() {
       selectors
     });
 
-    // When timeout is 0, this code won't be reached until the process is killed
-    if (timeout !== 0) {
+    // When timeout is 0 or debug mode is on, this code won't be reached until the process is killed
+    if (timeout !== 0 && process.env.SUBLIME_DEBUG !== '1') {
       if (result.error) {
         console.error('\nReplay encountered an error:', result.error);
         process.exit(1);

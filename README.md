@@ -6,7 +6,6 @@ A TypeScript monorepo following strict TypeScript and ESLint configuration.
 
 - `apps/`: Application packages
 - `packages/`: Library packages
-  - `utils/`: Utility functions
 
 ## Development
 

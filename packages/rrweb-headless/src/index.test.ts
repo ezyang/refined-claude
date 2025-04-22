@@ -3,6 +3,9 @@ import { runRrwebReplay, loadEventsFromFile } from './index';
 import path from 'path';
 import fs from 'fs/promises';
 
+// Check if we're in debug mode
+const isDebugMode = process.env.SUBLIME_DEBUG === '1';
+
 // This is an actual end-to-end test that launches a real browser
 describe('rrweb-headless e2e', () => {
   it('should launch a real browser and replay events', async () => {
@@ -22,7 +25,8 @@ describe('rrweb-headless e2e', () => {
     const result = await runRrwebReplay({
       events: testEvents,
       playbackSpeed: 4,
-      timeout: 10000, // Shorter timeout for CI environments
+      // In debug mode, set timeout to 0 (browser stays open), otherwise use a shorter timeout for CI
+      timeout: isDebugMode ? 0 : 10000,
       chromiumArgs: [
         `--disable-extensions-except=${extensionPath}`,
         `--load-extension=${extensionPath}`
@@ -52,13 +56,16 @@ describe('rrweb-headless e2e', () => {
     // Depending on the test data, we might expect this to be true or false
     // For now we'll just log it, but in a real test you'd add an assertion
 
-    // Clean up resources
-    if (result.page) {
+    // Clean up resources - skip if in debug mode
+    if (result.page && !isDebugMode) {
       const browser = result.page.context().browser();
       await result.page.close();
       if (browser) {
         await browser.close();
       }
+    } else if (isDebugMode && result.page) {
+      console.log('Debug mode enabled - browser will remain open for inspection');
     }
-  }, 30_000);
+  // In debug mode, use a very long timeout (effectively no timeout), otherwise use 30 seconds
+  }, isDebugMode ? 24 * 60 * 60 * 1000 : 30_000); // Use 24 hours in debug mode
 });
