@@ -198,17 +198,108 @@ async function setupRrwebPage(page: Page, events: eventWithTime[], playbackSpeed
 
   // CSS styles for the replay page
   const styles = `
-    body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; }
-    #replay { width: 100%; height: 100%; position: relative; }
-    #replay iframe { width: 100%; height: 100%; border: none; position: absolute; top: 0; left: 0; }
-    .replayer-wrapper { width: 100% !important; height: 100% !important; }
-    .replayer-mirror { width: 100% !important; height: 100% !important; }
-    #status { position: fixed; bottom: 10px; right: 10px; background: rgba(0,0,0,0.7); color: white;
-              padding: 5px 10px; border-radius: 4px; font-family: monospace; z-index: 10000; }
-    #error { position: fixed; top: 0; left: 0; right: 0; background: #ff5252; color: white;
-             padding: 10px; text-align: center; font-family: sans-serif; display: none; z-index: 10000; }
-    .highlight { outline: 2px solid red !important; outline-offset: 2px !important;
-                 background-color: rgba(255, 0, 0, 0.2) !important; z-index: 10000 !important; position: relative !important; }
+    /* Reset all elements to ensure consistent layout */
+    *, *::before, *::after {
+      box-sizing: border-box;
+    }
+
+    body, html {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+    }
+
+    /* Create a container that covers the entire viewport */
+    #replay {
+      width: 100%;
+      height: 100%;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      margin: 0;
+      z-index: 9000; /* High z-index but below status elements */
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    #replay iframe {
+      width: 100%;
+      height: 100%;
+      border: none;
+      position: absolute;
+      top: 0;
+      left: 0;
+    }
+
+    /* Force the player elements to take full size and center correctly */
+    .replayer-wrapper {
+      width: 100% !important;
+      height: 100% !important;
+      position: absolute !important;
+      top: 0 !important;
+      left: 0 !important;
+      transform: none !important; /* Prevent transformations that might offset it */
+    }
+
+    .replayer-mirror {
+      width: 100% !important;
+      height: 100% !important;
+      position: absolute !important;
+      top: 0 !important;
+      left: 0 !important;
+      transform: none !important;
+    }
+
+    /* Status and error indicators with very high z-index */
+    #status {
+      position: fixed;
+      bottom: 10px;
+      right: 10px;
+      background: rgba(0,0,0,0.7);
+      color: white;
+      padding: 5px 10px;
+      border-radius: 4px;
+      font-family: monospace;
+      z-index: 10500;
+      pointer-events: none; /* Don't block interaction */
+    }
+
+    #error {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      background: #ff5252;
+      color: white;
+      padding: 10px;
+      text-align: center;
+      font-family: sans-serif;
+      display: none;
+      z-index: 10500;
+    }
+
+    .highlight {
+      outline: 2px solid red !important;
+      outline-offset: 2px !important;
+      background-color: rgba(255, 0, 0, 0.2) !important;
+      z-index: 10000 !important;
+      position: relative !important;
+    }
+
+    /* Protect against any interference from extension content */
+    body > :not(#replay):not(#status):not(#error) {
+      visibility: hidden !important;
+      position: absolute !important;
+      top: -9999px !important;
+      left: -9999px !important;
+      z-index: -1 !important;
+      pointer-events: none !important;
+    }
   `;
 
   // JavaScript for replay functionality
@@ -228,9 +319,50 @@ async function setupRrwebPage(page: Page, events: eventWithTime[], playbackSpeed
       console.error(message);
     }
 
+    // Flag as rrweb test environment to help extensions detect this context
+    document.body.setAttribute('data-rrweb-test', 'true');
+
     // Initialize global flags for replay status
     window.__REPLAY_FINISHED = false;
     window.__REPLAY_ERROR = undefined;
+
+    // Helper function to ensure player is centered
+    function ensurePlayerCentered() {
+      const replay = document.getElementById('replay');
+      if (!replay) return;
+
+      // Force the replay element to be the full viewport
+      replay.style.position = 'fixed';
+      replay.style.top = '0';
+      replay.style.left = '0';
+      replay.style.width = '100%';
+      replay.style.height = '100%';
+      replay.style.zIndex = '9000';
+
+      // Find any wrapper or mirror elements
+      const wrappers = document.querySelectorAll('.replayer-wrapper');
+      const mirrors = document.querySelectorAll('.replayer-mirror');
+
+      // Apply centering to wrappers
+      wrappers.forEach(wrapper => {
+        wrapper.style.position = 'absolute';
+        wrapper.style.top = '0';
+        wrapper.style.left = '0';
+        wrapper.style.width = '100%';
+        wrapper.style.height = '100%';
+        wrapper.style.transform = 'none';
+      });
+
+      // Apply centering to mirrors
+      mirrors.forEach(mirror => {
+        mirror.style.position = 'absolute';
+        mirror.style.top = '0';
+        mirror.style.left = '0';
+        mirror.style.width = '100%';
+        mirror.style.height = '100%';
+        mirror.style.transform = 'none';
+      });
+    }
 
     // Initialize replayer when page loads
     window.addEventListener('DOMContentLoaded', () => {
@@ -244,9 +376,15 @@ async function setupRrwebPage(page: Page, events: eventWithTime[], playbackSpeed
 
         statusEl.textContent = 'Loaded ' + events.length + ' events';
 
+        // Create a clean container for the player
+        const replayContainer = document.getElementById('replay');
+
+        // Clear any previous content (just in case)
+        replayContainer.innerHTML = '';
+
         // Fallback to basic rrweb replayer
         replayer = new rrweb.Replayer(events, {
-          root: document.getElementById('replay'),
+          root: replayContainer,
           liveMode: false,
           showWarning: true, // Enable warnings to help debug
           showDebug: false,
@@ -257,10 +395,16 @@ async function setupRrwebPage(page: Page, events: eventWithTime[], playbackSpeed
           mouseTail: true // Show mouse movements
         });
 
+        // Fix any positioning before playing
+        ensurePlayerCentered();
+
         statusEl.textContent = \`Playing at \${${playbackSpeed}}x speed...\`;
 
         // Start playback
         replayer.play();
+
+        // Periodically check player positioning and fix if needed
+        let positionInterval = setInterval(ensurePlayerCentered, 1000);
 
         // Display timing info - works with both player types
         let progressInterval = setInterval(() => {
@@ -279,6 +423,7 @@ async function setupRrwebPage(page: Page, events: eventWithTime[], playbackSpeed
             if (progress >= 100) {
               window.__REPLAY_FINISHED = true;
               clearInterval(progressInterval);
+              clearInterval(positionInterval);
               statusEl.textContent += ' - COMPLETE';
               console.log('Replay completed');
             }

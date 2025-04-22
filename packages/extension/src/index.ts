@@ -51,12 +51,20 @@ function findAndClickAllowButton(): void {
       // In test mode, don't actually click but mark for testing
       console.log('Test mode: Would click "Allow for this chat" button');
 
-      // Create a marker element in the DOM that can be detected by tests
+      // Create a marker element that doesn't affect page layout
       const marker = document.createElement('div');
       marker.id = 'allow-button-clicked-marker';
       marker.style.display = 'none';
+      marker.style.position = 'absolute';
+      marker.style.top = '-9999px';
+      marker.style.left = '-9999px';
+      marker.style.zIndex = '-1';
+      marker.style.pointerEvents = 'none';
       marker.setAttribute('data-button-text', allowButton.textContent || 'Allow for this chat');
-      document.body.appendChild(marker);
+
+      // Append to an existing non-visual element if possible or to body as a last resort
+      const container = document.head || document.body;
+      container.appendChild(marker);
     } else {
       // In normal mode, actually click the button
       console.log('Clicking "Allow for this chat" button');
@@ -122,11 +130,24 @@ function init(): void {
   state.isRrwebReplay = checkIfRrwebReplay();
   console.log('Running in rrweb replay mode:', state.isRrwebReplay);
 
-  // Run initial check in case the modal is already present
-  findAndClickAllowButton();
+  // Special handling for rrweb replay environment
+  if (state.isRrwebReplay) {
+    // In replay mode, we need to be extra careful not to interfere with the UI
+    console.log('Detected rrweb environment, using minimal DOM interaction mode');
 
-  // Set up observer for future changes
-  setupModalObserver();
+    // Wait for the DOM to fully initialize before checking for modals
+    window.setTimeout(() => {
+      findAndClickAllowButton();
+      setupModalObserver();
+    }, 1000);
+  } else {
+    // Standard initialization for normal environments
+    // Run initial check in case the modal is already present
+    findAndClickAllowButton();
+
+    // Set up observer for future changes
+    setupModalObserver();
+  }
 }
 
 // Start the extension
