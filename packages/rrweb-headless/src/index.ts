@@ -23,11 +23,6 @@ interface RrwebReplayOptions {
   playbackSpeed?: number;
 
   /**
-   * CSS selectors to check for existence after replay
-   */
-  selectors?: string[];
-
-  /**
    * Timeout in milliseconds (default: 30000)
    * Set to 0 to disable timeout (browser will stay open until manually closed)
    */
@@ -68,7 +63,6 @@ export async function runRrwebReplay(options: RrwebReplayOptions): Promise<Rrweb
   const {
     events,
     playbackSpeed = 1,
-    selectors = [],
     timeout = 30000,
     headless = true
   } = options;
@@ -87,7 +81,7 @@ export async function runRrwebReplay(options: RrwebReplayOptions): Promise<Rrweb
     const page = await context.newPage();
 
     // Setup page with rrweb player
-    await setupRrwebPage(page, events, playbackSpeed, selectors);
+    await setupRrwebPage(page, events, playbackSpeed);
 
     // If timeout is 0, we don't close the browser automatically
     if (timeout === 0) {
@@ -131,31 +125,7 @@ export async function runRrwebReplay(options: RrwebReplayOptions): Promise<Rrweb
       console.error('Error evaluating replay status:', evalError);
     }
 
-    // Check for the existence of the specified selectors
-    const selectorResults: Record<string, boolean> = {};
-
-    for (const selector of selectors) {
-      const exists = await page.evaluate((sel) => {
-        // Look for the iframe that rrweb-replay creates
-        const iframe = document.querySelector('#replay iframe');
-
-        // If iframe exists, search within its document
-        if (iframe && iframe.contentDocument) {
-          return iframe.contentDocument.querySelector(sel) !== null;
-        }
-
-        // Fallback to the main document if iframe not found
-        return document.querySelector(sel) !== null;
-      }, selector);
-
-      selectorResults[selector] = exists;
-    }
-
-    const elementExists = Object.values(selectorResults).every(Boolean);
-
     return {
-      elementExists,
-      selectorResults,
       replayCompleted,
       error
     };
@@ -170,7 +140,7 @@ export async function runRrwebReplay(options: RrwebReplayOptions): Promise<Rrweb
 /**
  * Sets up the page with rrweb player and injects the events
  */
-async function setupRrwebPage(page: Page, events: eventWithTime[], playbackSpeed: number, selectors: string[] = []): Promise<void> {
+async function setupRrwebPage(page: Page, events: eventWithTime[], playbackSpeed: number): Promise<void> {
   // Import rrweb and rrweb-player from node_modules
   const rrwebPath = require.resolve('rrweb/dist/rrweb.min.js');
   const rrwebContent = await fs.readFile(rrwebPath, 'utf-8');

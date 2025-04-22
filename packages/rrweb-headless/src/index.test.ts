@@ -19,7 +19,6 @@ describe('rrweb-headless e2e', () => {
     const result = await runRrwebReplay({
       events: testEvents,
       playbackSpeed: 4,
-      selectors: ['.z-modal'],
       timeout: 10000 // Shorter timeout for CI environments
     });
 
@@ -28,8 +27,6 @@ describe('rrweb-headless e2e', () => {
 
     // Verify results (the actual assertion may vary based on your test data)
     expect(result).toBeDefined();
-    expect(typeof result.elementExists).toBe('boolean');
-    expect(Object.keys(result.selectorResults)).toContain('.z-modal');
 
     // Check the new fields
     expect(typeof result.replayCompleted).toBe('boolean');
