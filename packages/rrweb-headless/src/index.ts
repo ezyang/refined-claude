@@ -479,32 +479,6 @@ async function setupRrwebPage(page: Page, events: eventWithTime[], playbackSpeed
 }
 
 /**
- * Calculate the total duration of the replay in milliseconds
- * Note: This is primarily used for internal calculations and timeouts,
- * not for determining when the replay is actually finished.
- */
-function calculateReplayDuration(events: eventWithTime[]): number {
-  // Check if events array is valid
-  if (!events || !Array.isArray(events) || events.length === 0) {
-    return 5000; // Default duration if no events
-  }
-
-  if (events.length < 2) {
-    return 5000; // Default duration if not enough events
-  }
-
-  // Ensure the events have timestamp properties
-  if (!events[0]?.hasOwnProperty('timestamp') || !events[events.length - 1]?.hasOwnProperty('timestamp')) {
-    return 5000; // Default duration if events don't have timestamp
-  }
-
-  const firstEventTime = events[0].timestamp;
-  const lastEventTime = events[events.length - 1].timestamp;
-
-  return lastEventTime - firstEventTime + 1000; // Add 1 second buffer
-}
-
-/**
  * Load rrweb events from a JSON file
  */
 export async function loadEventsFromFile(filePath: string): Promise<eventWithTime[]> {
