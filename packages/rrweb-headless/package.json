@@ -18,7 +18,7 @@
     "test": "vitest run",
     "test:e2e": "vitest run --config vitest.e2e.config.ts",
     "test-replay": "node dist/cli.js",
-    "test-replay:debug": "node dist/cli.js --debug --headful --timeout 120000"
+    "test-replay:debug": "node dist/cli.js --headful --timeout 0"
   },
   "dependencies": {
     "playwright": "^1.41.0",

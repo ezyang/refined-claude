@@ -3,7 +3,7 @@ import type { eventWithTime } from 'rrweb/typings/types';
 import fs from 'fs/promises';
 import path from 'path';
 
-interface RrwebHeadlessOptions {
+interface RrwebReplayOptions {
   /**
    * The rrweb events to replay
    */
@@ -21,6 +21,7 @@ interface RrwebHeadlessOptions {
 
   /**
    * Timeout in milliseconds (default: 30000)
+   * Set to 0 to disable timeout (browser will stay open until manually closed)
    */
   timeout?: number;
 
@@ -30,7 +31,7 @@ interface RrwebHeadlessOptions {
   headless?: boolean;
 }
 
-interface RrwebHeadlessResult {
+interface RrwebReplayResult {
   /**
    * Whether all specified elements exist
    */
@@ -43,15 +44,15 @@ interface RrwebHeadlessResult {
 }
 
 /**
- * Runs a rrweb replay in a headless browser and checks for element existence
+ * Runs a rrweb replay in a browser and checks for element existence
  */
-export async function runRrwebHeadless(options: RrwebHeadlessOptions): Promise<RrwebHeadlessResult> {
+export async function runRrwebReplay(options: RrwebReplayOptions): Promise<RrwebReplayResult> {
   const {
     events,
     playbackSpeed = 1,
     selectors = [],
     timeout = 30000,
-    headless = false  // TODO: set back to true
+    headless = true
   } = options;
 
   let browser: Browser | null = null;
@@ -70,9 +71,18 @@ export async function runRrwebHeadless(options: RrwebHeadlessOptions): Promise<R
     const totalDuration = calculateReplayDuration(events);
     const waitTime = Math.ceil(totalDuration / playbackSpeed);
 
-    // Cap the wait time to the provided timeout
-    const effectiveWaitTime = Math.min(waitTime, timeout);
-    await page.waitForTimeout(effectiveWaitTime);
+    // If timeout is 0, we don't close the browser automatically
+    if (timeout === 0) {
+      console.log('Browser will remain open (timeout=0). Press Ctrl+C to exit.');
+
+      // Wait indefinitely (until the process is killed)
+      // Note: This will keep the process running
+      await new Promise(() => {});
+    } else {
+      // Cap the wait time to the provided timeout
+      const effectiveWaitTime = Math.min(waitTime, timeout);
+      await page.waitForTimeout(effectiveWaitTime);
+    }
 
     // Check for the existence of the specified selectors
     const selectorResults: Record<string, boolean> = {};
@@ -92,8 +102,8 @@ export async function runRrwebHeadless(options: RrwebHeadlessOptions): Promise<R
       selectorResults
     };
   } finally {
-    // Clean up
-    if (browser) {
+    // Clean up - only if timeout is not 0
+    if (browser && timeout !== 0) {
       await browser.close();
     }
   }
@@ -261,3 +271,16 @@ export async function loadEventsFromFile(filePath: string): Promise<eventWithTim
   const content = await fs.readFile(filePath, 'utf-8');
   return JSON.parse(content);
 }
+
+/**
+ * @deprecated Use runRrwebReplay instead
+ * Backwards compatibility - this function calls runRrwebReplay with the same parameters
+ */
+export async function runRrwebHeadless(options: RrwebReplayOptions): Promise<RrwebReplayResult> {
+  console.warn('Warning: runRrwebHeadless is deprecated, use runRrwebReplay instead');
+  return runRrwebReplay(options);
+}
+
+// Export types with backward compatible aliases
+export type RrwebHeadlessOptions = RrwebReplayOptions;
+export type RrwebHeadlessResult = RrwebReplayResult;
