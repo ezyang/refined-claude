@@ -3,6 +3,7 @@ import { chromium, type Browser, type Page } from 'playwright';
 import type { eventWithTime } from 'rrweb/dist/types/types';
 import * as fs from 'fs/promises';
 import * as path from 'path';
+import { createReplayServer } from './server';
 
 // Extend Window interface to include our custom properties
 declare global {
@@ -158,10 +159,24 @@ export async function runRrwebReplay(options: RrwebReplayOptions): Promise<Rrweb
     };
   } finally {
     // Clean up - only if timeout is not 0 and debug mode is off
-    if (browser && timeout !== 0 && !isDebugMode) {
+    if (timeout !== 0 && !isDebugMode) {
+      // Close the local HTTP server if it exists
+      if (page) {
+        // @ts-ignore - Accessing custom property
+        const server = page._replayServer;
+        if (server) {
+          try {
+            await server.close();
+            console.log('Replay server closed');
+          } catch (err) {
+            console.error('Error closing replay server:', err);
+          }
+        }
+      }
+
       // Don't close the browser if we're including the page in results
       // Let the caller handle closing it
-      if (!options.chromiumArgs || options.chromiumArgs.length === 0) {
+      if (browser && (!options.chromiumArgs || options.chromiumArgs.length === 0)) {
         await browser.close();
       }
     }
@@ -464,8 +479,27 @@ async function setupRrwebPage(page: Page, events: eventWithTime[], playbackSpeed
     `const events = ${JSON.stringify(events)};`
   );
 
-  // Navigate to the HTML content
-  await page.setContent(htmlWithEvents);
+  // Create a local HTTP server to serve the content
+  // This ensures content scripts can be properly injected (unlike with data: URLs)
+  const server = await createReplayServer();
+
+  // Serve our HTML content
+  server.serveContent(htmlWithEvents);
+
+  // Navigate to the local server URL
+  const serverUrl = `http://localhost:${server.port}`;
+  console.log(`Navigating to replay server at ${serverUrl}`);
+  await page.goto(serverUrl);
+
+  // Additional logging to help debug extension content script issues
+  console.log('Page loaded, adding console listener for extension logs');
+  page.on('console', msg => {
+    console.log(`Browser console [${msg.type()}]: ${msg.text()}`);
+  });
+
+  // Store the server in the page object for cleanup later
+  // @ts-ignore - Adding custom property to store server reference
+  page._replayServer = server;
 }
 
 /**

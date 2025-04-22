@@ -1,6 +1,8 @@
 // Content script for the Chrome extension
 // This script runs in the context of web pages and looks for .z-modal elements
 
+console.log('Sublime Claude content script loaded! URL:', window.location.href);
+
 // Class to check if we're running in rrweb replay environment
 const RRWEB_REPLAY_MARKER = 'rrweb-replay-environment';
 
