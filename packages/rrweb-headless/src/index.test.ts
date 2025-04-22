@@ -18,7 +18,7 @@ describe('rrweb-headless e2e', () => {
     // Run the replay with actual events and check for z-modal
     const result = await runRrwebReplay({
       events: testEvents,
-      playbackSpeed: 1,
+      playbackSpeed: 4,
       selectors: ['.z-modal'],
       timeout: 10000 // Shorter timeout for CI environments
     });
