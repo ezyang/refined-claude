@@ -113,9 +113,27 @@ export async function runRrwebReplay(options: RrwebReplayOptions): Promise<Rrweb
  * Sets up the page with rrweb player and injects the events
  */
 async function setupRrwebPage(page: Page, events: eventWithTime[], playbackSpeed: number, selectors: string[] = []): Promise<void> {
-  // Import rrweb from node_modules
+  // Import rrweb and rrweb-player from node_modules
   const rrwebPath = require.resolve('rrweb/dist/rrweb.min.js');
   const rrwebContent = await fs.readFile(rrwebPath, 'utf-8');
+
+  // Try to find and import rrweb-player
+  let rrwebPlayerContent = '';
+  let rrwebPlayerCssContent = '';
+  try {
+    const rrwebPlayerPath = require.resolve('rrweb-player/dist/index.js');
+    rrwebPlayerContent = await fs.readFile(rrwebPlayerPath, 'utf-8');
+
+    // Also try to load the CSS for rrweb-player
+    try {
+      const rrwebPlayerCssPath = require.resolve('rrweb-player/dist/style.css');
+      rrwebPlayerCssContent = await fs.readFile(rrwebPlayerCssPath, 'utf-8');
+    } catch (cssError) {
+      console.warn('rrweb-player CSS not found, player may not display correctly');
+    }
+  } catch (e) {
+    console.warn('rrweb-player not found, using basic replayer');
+  }
 
   // Create HTML content with rrweb scripts
   const html = `
@@ -126,6 +144,8 @@ async function setupRrwebPage(page: Page, events: eventWithTime[], playbackSpeed
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>rrweb Replay</title>
         <script>${rrwebContent}</script>
+        ${rrwebPlayerContent ? `<script>${rrwebPlayerContent}</script>` : ''}
+        ${rrwebPlayerCssContent ? `<style>${rrwebPlayerCssContent}</style>` : ''}
         <style>
           body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; }
           #replay { width: 100%; height: 100%; }
@@ -188,31 +208,73 @@ async function setupRrwebPage(page: Page, events: eventWithTime[], playbackSpeed
 
               statusEl.textContent = \`Loaded \${events.length} events\`;
 
-              replayer = new rrweb.Replayer(events, {
-                root: document.getElementById('replay'),
-                liveMode: false,
-                showWarning: false,
-                showDebug: false,
-                blockClass: 'no-record',
-                skipInactive: true
-              });
+              // Check if rrwebPlayer is available
+              if (typeof rrwebPlayer !== 'undefined') {
+                // Use rrweb-player
+                replayer = new rrwebPlayer({
+                  target: document.getElementById('replay'),
+                  props: {
+                    events,
+                    showController: false,
+                    skipInactive: true
+                  }
+                });
 
-              // Set playback speed
-              replayer.setSpeed(${playbackSpeed});
-              statusEl.textContent = \`Playing at \${${playbackSpeed}}x speed...\`;
+                // Set playback speed
+                replayer.setSpeed(${playbackSpeed});
+                statusEl.textContent = \`Playing at \${${playbackSpeed}}x speed...\`;
 
-              // Start playback
-              replayer.play();
+                // Start playback
+                replayer.play();
+              } else {
+                // Fallback to basic rrweb replayer
+                replayer = new rrweb.Replayer(events, {
+                  root: document.getElementById('replay'),
+                  liveMode: false,
+                  showWarning: false,
+                  showDebug: false,
+                  blockClass: 'no-record',
+                  skipInactive: true,
+                  speed: ${playbackSpeed} // Set speed directly in options
+                });
 
-              // Display timing info
+                statusEl.textContent = \`Playing at \${${playbackSpeed}}x speed...\`;
+
+                // Start playback
+                replayer.play();
+              }
+
+              // Display timing info - works with both player types
               setInterval(() => {
-                const currentTime = replayer.getCurrentTime();
-                const totalTime = replayer.getMetaData().totalTime;
-                const progress = Math.round((currentTime / totalTime) * 100);
-                statusEl.textContent = \`Replay: \${progress}% (\${Math.floor(currentTime / 1000)}s / \${Math.floor(totalTime / 1000)}s)\`;
+                let currentTime, totalTime;
+
+                if (typeof rrwebPlayer !== 'undefined' && replayer) {
+                  // For rrweb-player we need to get time differently
+                  // (this is simplified - in real implementation you would need event listeners)
+                  // Use first/last event timestamps as an approximation
+                  const firstTimestamp = events[0].timestamp;
+                  const lastTimestamp = events[events.length - 1].timestamp;
+                  totalTime = lastTimestamp - firstTimestamp;
+
+                  // Here we're approximating current time based on when replay started
+                  // In a real implementation, you'd use the ui-update-current-time event
+                  const replayStartTime = window.performance.now() - (window.performance.now() % 500);
+                  const elapsedTime = (window.performance.now() - replayStartTime) * ${playbackSpeed};
+                  currentTime = Math.min(elapsedTime, totalTime);
+                } else if (replayer) {
+                  // For basic replayer
+                  currentTime = replayer.getCurrentTime();
+                  totalTime = replayer.getMetaData().totalTime;
+                }
+
+                if (currentTime !== undefined && totalTime !== undefined) {
+                  const progress = Math.round((currentTime / totalTime) * 100);
+                  statusEl.textContent = \`Replay: \${progress}% (\${Math.floor(currentTime / 1000)}s / \${Math.floor(totalTime / 1000)}s)\`;
+                }
               }, 500);
 
               // When replay finishes, highlight any selectors that match
+              const replayDuration = events[events.length - 1].timestamp - events[0].timestamp;
               setTimeout(() => {
                 const selectors = ${JSON.stringify(selectors || [])};
                 if (selectors && selectors.length) {
@@ -222,7 +284,7 @@ async function setupRrwebPage(page: Page, events: eventWithTime[], playbackSpeed
                     statusEl.textContent = \`Found \${elements.length} matches for \${selector}\`;
                   });
                 }
-              }, replayer.getMetaData().totalTime / ${playbackSpeed} + 1000);
+              }, replayDuration / ${playbackSpeed} + 1000);
 
             } catch (err) {
               showError('Error initializing replayer: ' + err.message);

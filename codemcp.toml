@@ -1,3 +1,7 @@
 # codemcp configuration file
+project_prompt = '''
+- We use pnpm and turbo for everything, always give sample commands using
+  these frameworks.
+'''
 [commands]
 test = ["pnpm", "turbo", "test"]
