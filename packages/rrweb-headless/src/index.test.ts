@@ -53,6 +53,8 @@ describe('rrweb-headless e2e', () => {
     const testTimeout = isDebugMode ? 0 : 25000; // 25 seconds (less than test timeout of 30s)
     console.log('🔄 TEST MILESTONE: Setup completed');
 
+    // TODO: It seems you need to do something explicit to reload the background
+    // thread JS.  One way is to always create a new playwright-data folder
     const result = await runRrwebReplay({
       events: testEvents,
       playbackSpeed: 4,

@@ -100,10 +100,10 @@ export async function runRrwebReplay(options: RrwebReplayOptions): Promise<Rrweb
 
   try {
     // Launch a browser with the specified headless mode, overridden by env var if present
-    console.log(`🌐 Browser: ${effectiveHeadless ? 'headless' : 'headful'} mode, channel: ${channel}`);
+    console.log(`[DRIVER] 🌐 Browser: ${effectiveHeadless ? 'headless' : 'headful'} mode, channel: ${channel}`);
 
     if (userDataDir) {
-      console.log(`📂 User data directory: ${userDataDir}`);
+      console.log(`[DRIVER] 📂 User data directory: ${userDataDir}`);
     }
 
     // Common launch options
@@ -117,7 +117,7 @@ export async function runRrwebReplay(options: RrwebReplayOptions): Promise<Rrweb
 
     // In debug mode, log the configuration
     if (isDebugMode) {
-      console.log('🔍 Debug mode enabled with devtools');
+      console.log('[DRIVER] 🔍 Debug mode enabled with devtools');
     }
 
     // Launch the browser based on whether we're using a persistent context or not
@@ -139,7 +139,7 @@ export async function runRrwebReplay(options: RrwebReplayOptions): Promise<Rrweb
 
     // If timeout is 0 or debug mode is on, we don't close the browser automatically
     if (timeout === 0 || isDebugMode) {
-      console.log(`🔍 Browser will remain open. Press Ctrl+C to exit.`);
+      console.log(`[DRIVER] 🔍 Browser will remain open. Press Ctrl+C to exit.`);
 
       // Wait indefinitely (until the process is killed)
       // Note: This will keep the process running
@@ -155,29 +155,14 @@ export async function runRrwebReplay(options: RrwebReplayOptions): Promise<Rrweb
         page.on('console', async (msg) => {
           const text = msg.text();
 
-          // Only handle rrweb status messages here (other console messages are handled by the main listener)
-          if (!text.includes('[RRWEB_')) {
-            return;
-          }
-
           // Check for completion message
-          if (text.includes('[RRWEB_COMPLETE]')) {
+          if (text.includes('[RRWEB] Replay finished successfully')) {
             isCompleted = true;
-          }
-
-          // Also consider 100% progress as completion
-          if (text.includes('[RRWEB_PROGRESS] 100%')) {
-            isCompleted = true;
-          }
-
-          // Check for error message
-          if (text.includes('[RRWEB_ERROR]')) {
-            replayError = text.replace('[RRWEB_ERROR]', '').trim();
           }
         });
 
         // Wait for either completion or timeout
-        console.log(`⏱️ Waiting ${timeout}ms for replay to complete`);
+        console.log(`[DRIVER] ⏱️ Waiting ${timeout}ms for replay to complete`);
         let checkInterval: ReturnType<typeof setInterval> | null = null;
         let timeoutId: ReturnType<typeof setTimeout> | null = null;
 
@@ -263,7 +248,7 @@ export async function runRrwebReplay(options: RrwebReplayOptions): Promise<Rrweb
               server.close().catch((err: Error) => console.error('Error closing replay server:', err)),
               new Promise(r => setTimeout(r, cleanupTimeout / 3))
             ]);
-            console.log('Replay server closed or timed out');
+            console.log('[DRIVER] Replay server closed or timed out');
           }
         }
 
@@ -275,14 +260,14 @@ export async function runRrwebReplay(options: RrwebReplayOptions): Promise<Rrweb
             context.close().catch((err: Error) => console.error('Error closing context:', err)),
             new Promise(r => setTimeout(r, cleanupTimeout / 3))
           ]);
-          console.log('Browser context closed or timed out');
+          console.log('[DRIVER] Browser context closed or timed out');
         } else if (browser && (!options.chromiumArgs || options.chromiumArgs.length === 0)) {
           // Otherwise close the browser if available with a timeout
           await Promise.race([
             browser.close().catch((err: Error) => console.error('Error closing browser:', err)),
             new Promise(r => setTimeout(r, cleanupTimeout / 3))
           ]);
-          console.log('Browser closed or timed out');
+          console.log('[DRIVER] Browser closed or timed out');
         }
       } catch (err) {
         console.error('Cleanup error (suppressed):', err);
@@ -491,7 +476,7 @@ async function setupRrwebPage(page: Page, events: eventWithTime[], playbackSpeed
         }
 
         // Log initialization status
-        console.log('[RRWEB_STATUS] Loaded ' + events.length + ' events');
+        console.log('[RRWEB] Loaded ' + events.length + ' events');
         statusEl.textContent = 'Loaded ' + events.length + ' events';
 
         // Create a clean container for the player
@@ -517,13 +502,13 @@ async function setupRrwebPage(page: Page, events: eventWithTime[], playbackSpeed
         ensurePlayerCentered();
 
         statusEl.textContent = \`Playing at \${${playbackSpeed}}x speed...\`;
-        console.log('[RRWEB_STATUS] Playing at ' + ${playbackSpeed} + 'x speed');
+        console.log('[RRWEB] Playing at ' + ${playbackSpeed} + 'x speed');
 
         // Start playback, but give content script a chance to run first.
         // The timeout here is empirically determined to ensure playback
         // doesn't start until we've setup observers in the iframe
         setTimeout(() => {
-          console.log('[RRWEB_STATUS] Starting playback');
+          console.log('[RRWEB] Starting playback');
           replayer.play();
         }, 100);
 
@@ -545,7 +530,7 @@ async function setupRrwebPage(page: Page, events: eventWithTime[], playbackSpeed
 
             // Log progress periodically
             if (progress % 10 === 0) {
-              console.log('[RRWEB_PROGRESS] ' + progress + '%');
+              console.log('[RRWEB] ' + progress + '%');
             }
 
             // Check if replay is complete
@@ -553,8 +538,8 @@ async function setupRrwebPage(page: Page, events: eventWithTime[], playbackSpeed
               clearInterval(progressInterval);
               clearInterval(positionInterval);
               statusEl.textContent += ' - COMPLETE';
-              console.log('[RRWEB_PROGRESS] 100%'); // Explicitly log 100% progress
-              console.log('[RRWEB_COMPLETE] Replay finished successfully');
+              console.log('[RRWEB] 100%'); // Explicitly log 100% progress
+              console.log('[RRWEB] Replay finished successfully');
             }
           }
         }, 500);
@@ -602,19 +587,19 @@ async function setupRrwebPage(page: Page, events: eventWithTime[], playbackSpeed
 
   // Navigate to the local server URL
   const serverUrl = `http://localhost:${server.port}`;
-  console.log(`🌐 Replay server: ${serverUrl}`);
+  console.log(`[DRIVER] 🌐 Replay server: ${serverUrl}`);
 
   // Start navigation but don't wait for it to complete.
   // TODO: In fact, this navigation never "completes", need
   // to reconfigure Playwright call so that it treats DOM initialization
   const navigationPromise = page.goto(serverUrl, { timeout: 0 }).catch(err => {
     if (!err.message.includes("page.goto: Target page, context or browser has been closed")) {
-      console.error(`❌ Navigation error: ${err.message}`);
+      console.error(`[DRIVER] ❌ Navigation error: ${err.message}`);
     }
   });
 
   // Set up console listener immediately without waiting for navigation to complete
-  console.log('🔊 Setting up console logger');
+  console.log('[DRIVER] 🔊 Setting up console logger');
   page.on('console', msg => {
     // Filter out CORS errors and resource loading failures to reduce noise
     const text = msg.text();
@@ -627,11 +612,11 @@ async function setupRrwebPage(page: Page, events: eventWithTime[], playbackSpeed
 
     // Format console messages by type
     if (msg.type() === 'error') {
-      console.error(`Browser error: ${text}`);
+      console.error(`[CONSOLE] Browser error: ${text}`);
     } else if (msg.type() === 'warning') {
-      console.warn(`Browser warning: ${text}`);
+      console.warn(`[CONSOLE] Browser warning: ${text}`);
     } else {
-      console.log(`Browser: ${text}`);
+      console.log(`${text}`);
     }
   });
 

@@ -53,24 +53,24 @@ function executeInTargetFrame(frameSelector: string): boolean {
   if (frameSelector === 'self' ||
       (window.frameElement && window.frameElement.getAttribute('data-extension-frame-id') === frameSelector)) {
 
-    console.log('Target frame identified, setting up modal observer');
+    console.log('[I-CONTENT] Target frame identified, setting up modal observer');
 
     // Function to find and click the "Allow for this chat" button
     function findAndClickAllowButton(): void {
       const modal = document.querySelector('.z-modal');
       if (!modal) return;
 
-      console.log('Found z-modal in iframe:', modal);
+      console.log('[I-CONTENT] Found z-modal in iframe:', modal);
 
       const allowButton = Array.from(modal.querySelectorAll('button'))
         .find(button => button.textContent?.includes('Allow for this chat'));
 
       if (allowButton) {
-        console.log('Found "Allow for this chat" button in iframe:', allowButton);
-        console.log('Clicking "Allow for this chat" button in iframe');
+        console.log('[I-CONTENT] Found "Allow for this chat" button in iframe:', allowButton);
+        console.log('[I-CONTENT] Clicking "Allow for this chat" button in iframe');
         allowButton.click();
       } else {
-        console.log('Could not find "Allow for this chat" button in modal in iframe');
+        console.log('[I-CONTENT] Could not find "Allow for this chat" button in modal in iframe');
       }
     }
 
@@ -109,7 +109,7 @@ function executeInTargetFrame(frameSelector: string): boolean {
         attributeFilter: ['class']
       });
 
-      console.log('Modal observer set up in iframe');
+      console.log('[I-CONTENT] Modal observer set up in iframe');
     }
 
     // Check for existing modals first

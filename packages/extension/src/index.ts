@@ -1,7 +1,7 @@
 // Content script for the Chrome extension
 // This script runs in the context of web pages and looks for .z-modal elements
 
-console.log('Sublime Claude content script loaded! URL:', window.location.href);
+console.log('[CONTENT] Sublime Claude content script loaded! URL:', window.location.href);
 
 // Class to check if we're running in rrweb replay environment
 const RRWEB_REPLAY_MARKER = 'rrweb-replay-environment';
@@ -46,18 +46,18 @@ function findAndClickAllowButton(): void {
   if (!modal) return;
 
   // Log for debugging
-  console.log('Found z-modal:', modal);
+  console.log('[CONTENT] Found z-modal:', modal);
 
   // Look for the button that contains "Allow for this chat" text
   const allowButton = Array.from(modal.querySelectorAll('button'))
     .find(button => button.textContent?.includes('Allow for this chat'));
 
   if (allowButton) {
-    console.log('Found "Allow for this chat" button:', allowButton);
+    console.log('[CONTENT] Found "Allow for this chat" button:', allowButton);
 
     if (state.isRrwebReplay) {
       // In test mode, don't actually click but mark for testing
-      console.log('Test mode: Would click "Allow for this chat" button');
+      console.log('[CONTENT] Test mode: Would click "Allow for this chat" button');
 
       // Create a marker element that doesn't affect page layout
       const marker = document.createElement('div');
@@ -75,11 +75,11 @@ function findAndClickAllowButton(): void {
       container.appendChild(marker);
     } else {
       // In normal mode, actually click the button
-      console.log('Clicking "Allow for this chat" button');
+      console.log('[CONTENT] Clicking "Allow for this chat" button');
       allowButton.click();
     }
   } else {
-    console.log('Could not find "Allow for this chat" button in modal');
+    console.log('[CONTENT] Could not find "Allow for this chat" button in modal');
   }
 }
 
@@ -125,14 +125,14 @@ function setupModalObserver(): void {
     attributeFilter: ['class']
   });
 
-  console.log('Modal observer set up');
+  console.log('[CONTENT] Modal observer set up');
 }
 
 /**
  * Set up MutationObserver to watch for iframe elements in rrweb replay
  */
 function setupIframeObserver(): void {
-  console.log('Setting up iframe observer for rrweb replay');
+  console.log('[CONTENT] Setting up iframe observer for rrweb replay');
 
   // Maintain a record of processed iframes to avoid duplicates
   const processedIframes = new Set<string>();
@@ -164,7 +164,7 @@ function setupIframeObserver(): void {
   const existingIframes = document.querySelectorAll('iframe');
   existingIframes.forEach(iframe => injectContentScriptIntoIframe(iframe, processedIframes));
 
-  console.log('Iframe observer set up');
+  console.log('[CONTENT] Iframe observer set up');
 }
 
 /**
@@ -183,18 +183,18 @@ function injectContentScriptIntoIframe(iframe: HTMLIFrameElement, processedIfram
 
   // Skip if we've already processed this iframe
   if (processedIframes.has(iframeId)) {
-    console.log('Content script already processed for this iframe:', iframeId);
+    console.log('[CONTENT] Content script already processed for this iframe:', iframeId);
     return;
   }
 
-  console.log('Attempting to inject content script into iframe:', iframeId);
+  console.log('[CONTENT] Attempting to inject content script into iframe:', iframeId);
 
   // Mark this iframe as processed
   processedIframes.add(iframeId);
 
   // Ensure the iframe is loaded before trying to inject scripts
   if (!iframe.contentWindow) {
-    console.log('Iframe not fully loaded yet, setting up load listener');
+    console.log('[CONTENT] Iframe not fully loaded yet, setting up load listener');
     iframe.addEventListener('load', () => {
       injectContentScriptIntoIframe(iframe, processedIframes);
     });
@@ -219,7 +219,7 @@ function injectContentScriptIntoIframe(iframe: HTMLIFrameElement, processedIfram
       }
 
       const tabId = response.tabId;
-      console.log('Got tab ID:', tabId, 'for iframe injection');
+      console.log('[CONTENT] Got tab ID:', tabId, 'for iframe injection');
 
       // Now ask the background script to inject into the specific frame
       chrome.runtime.sendMessage(
@@ -237,7 +237,7 @@ function injectContentScriptIntoIframe(iframe: HTMLIFrameElement, processedIfram
           if (injectionResponse.error) {
             console.error('Injection error from background script:', injectionResponse.error);
           } else {
-            console.log('Successfully injected script into iframe:', injectionResponse);
+            console.log('[CONTENT] Successfully injected script into iframe:', injectionResponse);
           }
         }
       );
@@ -267,7 +267,7 @@ function isIframeInsideRrwebReplay(): boolean {
     ));
   } catch (e) {
     // If we can't access the parent due to cross-origin restrictions
-    console.log('Cannot access parent frame, assuming not in replay:', e);
+    console.log('[CONTENT] Cannot access parent frame, assuming not in replay:', e);
     return false;
   }
 }
@@ -276,16 +276,16 @@ function isIframeInsideRrwebReplay(): boolean {
  * Initialize the extension
  */
 function init(): void {
-  console.log('Sublime Claude Modal Auto-Clicker extension initialized');
+  console.log('[CONTENT] Sublime Claude Modal Auto-Clicker extension initialized');
 
   // Check if we're in an rrweb replay environment
   state.isRrwebReplay = checkIfRrwebReplay();
-  console.log('Running in rrweb replay mode:', state.isRrwebReplay);
+  console.log('[CONTENT] Running in rrweb replay mode:', state.isRrwebReplay);
 
   // Logic is reversed: the content script should run in iframes inside rrweb replay,
   // not in the top level rrweb replay environment itself
   const isIframeInReplay = isIframeInsideRrwebReplay();
-  console.log('Is iframe inside rrweb replay:', isIframeInReplay);
+  console.log('[CONTENT] Is iframe inside rrweb replay:', isIframeInReplay);
 
   // Only continue if:
   // 1. This is NOT a top-level rrweb replay environment, OR
@@ -294,7 +294,7 @@ function init(): void {
     // Set up observer for future changes
     setupModalObserver();
   } else {
-    console.log('Skipping modal observer setup in top-level rrweb replay environment');
+    console.log('[CONTENT] Skipping modal observer setup in top-level rrweb replay environment');
 
     // In top-level rrweb replay environment, we need to inject our script into iframes
     setupIframeObserver();

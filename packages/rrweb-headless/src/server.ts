@@ -32,7 +32,7 @@ export async function createReplayServer(): Promise<{
   // Get the assigned port
   const port = (server.address() as AddressInfo).port;
 
-  console.log(`Replay server started on http://localhost:${port}`);
+  console.log(`[DRIVER] Replay server started on http://localhost:${port}`);
 
   return {
     server,
