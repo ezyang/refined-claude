@@ -162,6 +162,11 @@ export async function runRrwebReplay(options: RrwebReplayOptions): Promise<Rrweb
             isCompleted = true;
           }
 
+          // Also consider 100% progress as completion
+          if (text.includes('[RRWEB_PROGRESS] 100%')) {
+            isCompleted = true;
+          }
+
           // Check for error message
           if (text.includes('[RRWEB_ERROR]')) {
             replayError = text.replace('[RRWEB_ERROR]', '').trim();
@@ -170,23 +175,39 @@ export async function runRrwebReplay(options: RrwebReplayOptions): Promise<Rrweb
 
         // Wait for either completion or timeout
         console.log(`Will wait ${timeout}ms for test to complete`);
-        await Promise.race([
-          // Wait for console message indicating completion
-          new Promise(resolve => {
-            const checkInterval = setInterval(() => {
-              if (isCompleted || replayError) {
-                clearInterval(checkInterval);
-                resolve(true);
-              }
-            }, 100);
-          }),
-          // Timeout
-          new Promise((_, reject) => {
-            setTimeout(() => {
-              reject(new Error(`Timeout of ${timeout}ms exceeded`));
-            }, timeout);
-          })
-        ]);
+        let checkInterval: ReturnType<typeof setInterval> | null = null;
+        let timeoutId: ReturnType<typeof setTimeout> | null = null;
+
+        try {
+          await Promise.race([
+            // Wait for console message indicating completion
+            new Promise(resolve => {
+              checkInterval = setInterval(() => {
+                if (isCompleted || replayError) {
+                  if (checkInterval) {
+                    clearInterval(checkInterval);
+                    checkInterval = null;
+                  }
+                  resolve(true);
+                }
+              }, 100);
+            }),
+            // Timeout
+            new Promise((_, reject) => {
+              timeoutId = setTimeout(() => {
+                reject(new Error(`Timeout of ${timeout}ms exceeded`));
+              }, timeout);
+            })
+          ]);
+        } finally {
+          // Ensure we clean up the timers even if Promise.race is interrupted
+          if (checkInterval) {
+            clearInterval(checkInterval);
+          }
+          if (timeoutId) {
+            clearTimeout(timeoutId);
+          }
+        }
 
         // Check if there was an error
         if (replayError) {
@@ -209,6 +230,13 @@ export async function runRrwebReplay(options: RrwebReplayOptions): Promise<Rrweb
     let error: string | undefined = undefined;
     let elementExists = true; // Basic defaults for backward compatibility
 
+    // When we get to this point, ensure we've closed the resources if any error message was found during the test
+    // The replayError variable is defined within the try/catch block above, but isn't accessible here
+    // Instead we check if error is already set from an exception above
+    if (error) {
+      replayCompleted = false;
+    }
+
     // Expose the page object for testing purposes
     return {
       replayCompleted,
@@ -219,28 +247,42 @@ export async function runRrwebReplay(options: RrwebReplayOptions): Promise<Rrweb
   } finally {
     // Clean up - only if timeout is not 0 and debug mode is off
     if (timeout !== 0 && !isDebugMode) {
-      // Close the local HTTP server if it exists
-      if (page) {
-        // @ts-ignore - Accessing custom property
-        const server = page._replayServer;
-        if (server) {
-          try {
-            await server.close();
-            console.log('Replay server closed');
-          } catch (err) {
-            console.error('Error closing replay server:', err);
+      try {
+        // Use a timeout for cleanup operations to avoid hanging
+        const cleanupTimeout = Math.min(5000, timeout / 2); // Max 5 seconds or half the test timeout
+
+        // Close the local HTTP server if it exists with a timeout
+        if (page) {
+          // @ts-ignore - Accessing custom property
+          const server = page._replayServer;
+          if (server) {
+            await Promise.race([
+              server.close().catch((err: Error) => console.error('Error closing replay server:', err)),
+              new Promise(r => setTimeout(r, cleanupTimeout / 3))
+            ]);
+            console.log('Replay server closed or timed out');
           }
         }
-      }
 
-      // Don't close the browser if we're including the page in results
-      // Let the caller handle closing it
-      if (context && !options.userDataDir && (!options.chromiumArgs || options.chromiumArgs.length === 0)) {
-        // If using a persistent context, close the context instead of the browser
-        await context.close();
-      } else if (browser && (!options.chromiumArgs || options.chromiumArgs.length === 0)) {
-        // Otherwise close the browser if available
-        await browser.close();
+        // Don't close the browser if we're including the page in results
+        // Let the caller handle closing it
+        if (context && !options.userDataDir && (!options.chromiumArgs || options.chromiumArgs.length === 0)) {
+          // If using a persistent context, close the context instead of the browser with a timeout
+          await Promise.race([
+            context.close().catch((err: Error) => console.error('Error closing context:', err)),
+            new Promise(r => setTimeout(r, cleanupTimeout / 3))
+          ]);
+          console.log('Browser context closed or timed out');
+        } else if (browser && (!options.chromiumArgs || options.chromiumArgs.length === 0)) {
+          // Otherwise close the browser if available with a timeout
+          await Promise.race([
+            browser.close().catch((err: Error) => console.error('Error closing browser:', err)),
+            new Promise(r => setTimeout(r, cleanupTimeout / 3))
+          ]);
+          console.log('Browser closed or timed out');
+        }
+      } catch (err) {
+        console.error('Cleanup error (suppressed):', err);
       }
     }
   }
@@ -503,6 +545,7 @@ async function setupRrwebPage(page: Page, events: eventWithTime[], playbackSpeed
               clearInterval(progressInterval);
               clearInterval(positionInterval);
               statusEl.textContent += ' - COMPLETE';
+              console.log('[RRWEB_PROGRESS] 100%'); // Explicitly log 100% progress
               console.log('[RRWEB_COMPLETE] Replay finished successfully');
             }
           }

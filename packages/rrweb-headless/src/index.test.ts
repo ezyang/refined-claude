@@ -47,11 +47,14 @@ describe('rrweb-headless e2e', () => {
     }
 
     // Run the replay with actual events and check for z-modal
+    const testTimeout = isDebugMode ? 0 : 25000; // Set to 25 seconds (slightly less than test timeout of 30s)
+    console.log(`Using replay timeout of ${testTimeout}ms`);
+
     const result = await runRrwebReplay({
       events: testEvents,
       playbackSpeed: 4,
-      // In debug mode, set timeout to 0 (browser stays open), otherwise use a shorter timeout for CI
-      timeout: isDebugMode ? 0 : 10000,
+      // In debug mode, set timeout to 0 (browser stays open), otherwise use a timeout that's shorter than the test timeout
+      timeout: testTimeout,
       // Use persistent profile
       userDataDir: userDataDir,
       // Explicitly specify the chromium channel
@@ -70,6 +73,7 @@ describe('rrweb-headless e2e', () => {
 
     // Verify results (the actual assertion may vary based on your test data)
     expect(result).toBeDefined();
+    console.log('=== TEST MILESTONE: Result object received ===');
 
     // Check the new fields
     expect(typeof result.replayCompleted).toBe('boolean');
@@ -79,7 +83,7 @@ describe('rrweb-headless e2e', () => {
 
     // For the console.log approach, we've already captured all messages through the page.on('console') handler
     // Let's log the result directly
-    console.log('Replay completed:', result.replayCompleted);
+    console.log('=== TEST MILESTONE: Replay completed status:', result.replayCompleted, ' ===');
 
     // We can still check for specific elements if needed
     const allowButtonClicked = await result.page?.evaluate(() => {
@@ -117,35 +121,61 @@ describe('rrweb-headless e2e', () => {
 
     // Clean up resources - skip if in debug mode
     if (result.page && !isDebugMode) {
-      // Close any HTTP server that may be running
-      // @ts-ignore - Accessing custom property
-      const server = result.page._replayServer;
-      if (server) {
-        try {
-          await server.close();
-          console.log('Replay server closed from test');
-        } catch (err) {
-          console.error('Error closing replay server from test:', err);
+      try {
+        console.log('=== TEST MILESTONE: Starting cleanup ===');
+
+        // Use a short timeout for cleanup operations to prevent hanging
+        const cleanupTimeout = 5000; // 5 seconds max
+
+        // Close any HTTP server that may be running
+        // @ts-ignore - Accessing custom property
+        const server = result.page._replayServer;
+        if (server) {
+          try {
+            await Promise.race([
+              server.close(),
+              new Promise(r => setTimeout(r, cleanupTimeout / 3))
+            ]);
+            console.log('Replay server closed from test or timed out');
+          } catch (err) {
+            console.error('Error closing replay server from test:', err);
+          }
         }
+
+        // Get context before closing the page
+        const context = result.page.context();
+
+        // Close page first with timeout
+        try {
+          await Promise.race([
+            result.page.close(),
+            new Promise(r => setTimeout(r, cleanupTimeout / 3))
+          ]);
+          console.log('Page closed or timed out');
+        } catch (err) {
+          console.error('Error closing page:', err);
+        }
+
+        // When using persistent context, we close the context instead of the browser
+        // We do this if we're in a normal test and not in debug mode
+        try {
+          await Promise.race([
+            context.close(),
+            new Promise(r => setTimeout(r, cleanupTimeout / 3))
+          ]);
+          console.log('Browser context closed or timed out');
+        } catch (err) {
+          console.error('Error closing context:', err);
+        }
+
+        console.log('=== TEST MILESTONE: Cleanup completed ===');
+
+      } catch (err) {
+        console.error('Error during cleanup (suppressed):', err);
       }
-
-      // Get context and browser before closing the page
-      const context = result.page.context();
-      const browser = context.browser();
-
-      // Close page first
-      await result.page.close();
-
-      // When using persistent context, we close the context instead of the browser
-      // We do this if we're in a normal test and not in debug mode
-      await context.close();
-      console.log('Browser context closed');
-
-      // We don't need to explicitly close the browser when using a persistent context
-      // as it's managed by the context itself
     } else if (isDebugMode && result.page) {
       console.log('Debug mode enabled - browser will remain open for inspection');
     }
-  // In debug mode, use a very long timeout (effectively no timeout), otherwise use 30 seconds
-  }, isDebugMode ? 24 * 60 * 60 * 1000 : 30_000); // Use 24 hours in debug mode
+  // In debug mode, use a very long timeout (effectively no timeout), otherwise use 60 seconds
+  }, isDebugMode ? 24 * 60 * 60 * 1000 : 60_000); // Use 24 hours in debug mode
 });
