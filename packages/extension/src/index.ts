@@ -18,6 +18,9 @@ const state: ExtensionState = {
 
 /**
  * Check if the current environment is an rrweb replay
+ *
+ * This checks if the *current window* is an rrweb replay environment.
+ * For iframes inside replays, use the isIframeInRrwebReplay check in init() instead.
  */
 function checkIfRrwebReplay(): boolean {
   // Check for specific elements or attributes that indicate rrweb replay
@@ -28,7 +31,10 @@ function checkIfRrwebReplay(): boolean {
   // Look for our internal markers from the test environment
   const hasTestMarkers = !!document.body.getAttribute('data-rrweb-test');
 
-  return hasRrwebElements || hasTestMarkers;
+  // Also check if we have our custom class marker
+  const hasMarkerClass = document.documentElement.classList.contains(RRWEB_REPLAY_MARKER);
+
+  return hasRrwebElements || hasTestMarkers || hasMarkerClass;
 }
 
 /**
@@ -123,6 +129,31 @@ function setupModalObserver(): void {
 }
 
 /**
+ * Check if the current frame is an iframe inside an rrweb replay environment
+ */
+function isIframeInsideRrwebReplay(): boolean {
+  // If we're a top-level window, we're not an iframe in a replay
+  if (window.self === window.top) {
+    return false;
+  }
+
+  // Check if the parent window shows signs of being a replay environment
+  try {
+    return !!(window.parent && (
+      window.parent.document.getElementById('replay') ||
+      window.parent.document.querySelector('.replayer-wrapper') ||
+      window.parent.document.querySelector('.replayer-mirror') ||
+      window.parent.document.body.getAttribute('data-rrweb-test') ||
+      window.parent.document.documentElement.classList.contains(RRWEB_REPLAY_MARKER)
+    ));
+  } catch (e) {
+    // If we can't access the parent due to cross-origin restrictions
+    console.log('Cannot access parent frame, assuming not in replay:', e);
+    return false;
+  }
+}
+
+/**
  * Initialize the extension
  */
 function init(): void {
@@ -132,23 +163,19 @@ function init(): void {
   state.isRrwebReplay = checkIfRrwebReplay();
   console.log('Running in rrweb replay mode:', state.isRrwebReplay);
 
-  // Special handling for rrweb replay environment
-  if (state.isRrwebReplay) {
-    // In replay mode, we need to be extra careful not to interfere with the UI
-    console.log('Detected rrweb environment, using minimal DOM interaction mode');
+  // Logic is reversed: the content script should run in iframes inside rrweb replay,
+  // not in the top level rrweb replay environment itself
+  const isIframeInReplay = isIframeInsideRrwebReplay();
+  console.log('Is iframe inside rrweb replay:', isIframeInReplay);
 
-    // Wait for the DOM to fully initialize before checking for modals
-    window.setTimeout(() => {
-      findAndClickAllowButton();
-      setupModalObserver();
-    }, 1000);
-  } else {
-    // Standard initialization for normal environments
-    // Run initial check in case the modal is already present
-    findAndClickAllowButton();
-
+  // Only continue if:
+  // 1. This is NOT a top-level rrweb replay environment, OR
+  // 2. This is an iframe INSIDE an rrweb replay environment
+  if (!state.isRrwebReplay || isIframeInReplay) {
     // Set up observer for future changes
     setupModalObserver();
+  } else {
+    console.log('Skipping observer setup in top-level rrweb replay environment');
   }
 }
 
@@ -156,4 +183,4 @@ function init(): void {
 init();
 
 // Export for testing
-export { findAndClickAllowButton, checkIfRrwebReplay };
+export { findAndClickAllowButton, checkIfRrwebReplay, isIframeInsideRrwebReplay };
