@@ -3,7 +3,7 @@ import { chromium, type Browser, type Page } from 'playwright';
 import type { eventWithTime } from 'rrweb/dist/types/types';
 import * as fs from 'fs/promises';
 import * as path from 'path';
-import { createReplayServer } from './server';
+import { createReplayServer } from './server.js';
 
 // Extend Window interface to include our custom properties
 declare global {

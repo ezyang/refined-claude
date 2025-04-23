@@ -1,55 +1,71 @@
-# Sublime Claude Chrome Extension
+# Sublime Claude Extension
 
-A Chrome extension that automatically clicks the "Allow for this chat" button in modal dialogs with `.z-modal` class.
-
-## Features
-
-- Detects `.z-modal` elements on the page
-- Automatically clicks "Allow for this chat" buttons within modals
-- Special testing mode for use with rrweb replay environments
+This Chrome extension automatically clicks the 'Allow for this chat' button in modal dialogs.
 
 ## Development
 
-```bash
-# Install dependencies
-pnpm install
+This is a Chrome Manifest V3 extension that uses:
+- TypeScript for type safety
+- tsup for bundling
 
-# Build the extension
+### Build Instructions
+
+The extension uses different bundling formats for its components:
+
+1. **Background Service Worker** - Uses ES modules format as required by MV3
+2. **Content Script** - Uses IIFE (Immediately Invoked Function Expression) format
+
+To build the extension:
+
+```bash
+# From the project root
 pnpm build
 
-# Run tests
-pnpm test
+# Or from the extension directory
+cd packages/extension
+pnpm build
 ```
 
-## Usage in Tests
+### Important Notes about MV3 and Bundling
 
-This extension can be loaded in Playwright tests to automatically handle modal dialogs during rrweb replays. The extension has special detection for rrweb replay environments and will create DOM markers instead of actually clicking buttons when in test mode.
+Chrome Manifest V3 has specific requirements for JavaScript bundles:
+
+- **Service Workers** must use ES modules format with `"type": "module"` in the manifest
+- **Content Scripts** must use plain scripts (IIFE) with no imports/exports
+
+The build configuration in `tsup.config.ts` handles this correctly with separate build configurations for each file type:
 
 ```typescript
-import { runRrwebReplay } from '@sublime-claude/rrweb-headless';
-import path from 'path';
+// Background script (service worker) for MV3 - ES Module format
+{
+  entry: ['src/background.ts'],
+  format: ['esm'],
+  // ...
+}
 
-// Path to extension
-const extensionPath = path.resolve(__dirname, '../../extension/dist');
-
-// Run replay with extension
-const result = await runRrwebReplay({
-  events: testEvents,
-  chromiumArgs: [
-    `--disable-extensions-except=${extensionPath}`,
-    `--load-extension=${extensionPath}`
-  ]
-});
-
-// Check if button was clicked
-const buttonClicked = await result.page?.evaluate(() => {
-  return document.getElementById('allow-button-clicked-marker') !== null;
-});
+// Content script for MV3 - IIFE format (no modules)
+{
+  entry: ['src/index.ts'],
+  format: ['iife'],
+  globalName: 'SCContentScript',
+  // ...
+}
 ```
 
-## Extension Structure
+### Development Workflow
 
-- `src/manifest.json` - Chrome extension manifest
-- `src/index.ts` - Content script that runs on pages
-- `src/background.ts` - Background script for extension initialization
-- `src/utils/rrwebPlayer.ts` - Utilities for testing with rrweb
+For local development with auto-reloading:
+
+```bash
+pnpm dev
+```
+
+Then load the `dist` directory as an unpacked extension in Chrome.
+
+## Testing
+
+Run tests with:
+
+```bash
+pnpm test
+```
