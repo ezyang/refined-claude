@@ -132,4 +132,6 @@ function executeInTargetFrame(frameSelector: string): boolean {
   return false; // Not the target frame
 }
 
-export {};
+// Export explicitly as an ES module - this helps bundlers understand it's an ES module
+const exported = {};
+export default exported;

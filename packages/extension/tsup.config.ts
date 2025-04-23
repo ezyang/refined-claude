@@ -7,6 +7,8 @@ export default defineConfig([
     format: ['esm'],
     outDir: 'dist',
     clean: false,
+    platform: 'browser', // Ensure browser environment
+    treeshake: true,     // Remove unused code
     dts: {
       resolve: true,
       compilerOptions: {
@@ -15,6 +17,7 @@ export default defineConfig([
       },
     },
     sourcemap: false,
+    noExternal: ['*'],   // Bundle all dependencies
   },
 
   // Content script for MV3 - IIFE format (no modules)
