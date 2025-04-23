@@ -9,6 +9,8 @@ A tool for running [rrweb](https://github.com/rrweb-io/rrweb) replays in headles
 - Set playback speed for faster analysis
 - Check for the existence of specific elements using CSS selectors (works with elements inside the iframe)
 - Built-in debugging tools and visualizations
+- Support for persistent browser profiles with user data directories
+- Explicit browser channel selection for consistent browser versions
 
 ## Usage
 
@@ -26,7 +28,11 @@ const result = await runRrwebReplay({
   playbackSpeed: 1.5,
   headless: false, // Set to false to see the full replay with webpage content
   timeout: 60000,
-  selectors: ['.my-element']
+  selectors: ['.my-element'],
+  // Use persistent browser profile (optional)
+  userDataDir: path.resolve(__dirname, '.playwright-data'),
+  // Explicitly use Chromium channel for consistent browser version
+  channel: 'chromium'
 });
 
 console.log(result.elementExists); // Whether all specified elements exist
@@ -81,6 +87,8 @@ SUBLIME_DEBUG=1 npx test-rrweb path/to/events.json
 - `--speed <number>`: Playback speed multiplier (default: 1)
 - `--timeout <ms>`: Timeout in milliseconds (default: 0 = no timeout)
 - `--selector <string>`: CSS selector to check (can be used multiple times)
+- `--user-data-dir <path>`: Path to user data directory for persistent browser profile
+- `--channel <string>`: Browser channel to use (chromium, chrome, msedge, etc.)
 - `--help`, `-h`: Show help information
 
 #### Environment Variables
@@ -88,6 +96,47 @@ SUBLIME_DEBUG=1 npx test-rrweb path/to/events.json
 - `SUBLIME_DEBUG=1`: Enable debug mode - opens a headful browser with devtools console open and keeps the browser open indefinitely
 
 For debugging purposes, you can use `--timeout 0` to keep the browser open indefinitely (until you press Ctrl+C), or set the `SUBLIME_DEBUG=1` environment variable to automatically open a browser with devtools.
+
+### Using Persistent Browser Profiles
+
+You can use persistent browser profiles to maintain state between replay sessions:
+
+```typescript
+// Create a persistent profile
+const userDataDir = path.resolve(__dirname, '.playwright-data');
+
+// Ensure the directory exists
+await fs.mkdir(userDataDir, { recursive: true });
+
+// Use the persistent profile
+const result = await runRrwebReplay({
+  events,
+  userDataDir: userDataDir,
+  channel: 'chromium' // Explicitly use Chromium channel
+});
+```
+
+Benefits of persistent profiles:
+- Browser state (cookies, local storage, etc.) is preserved between sessions
+- Faster startup time for subsequent sessions
+- Extensions state is maintained
+
+### Browser Channel Selection
+
+You can specify which browser channel to use:
+
+```typescript
+const result = await runRrwebReplay({
+  events,
+  // Use specific browser channel
+  channel: 'chromium' // 'chrome', 'msedge', etc.
+});
+```
+
+Using the explicit channel provides:
+- Consistent browser version across environments
+- Better compatibility with certain extensions
+- More predictable behavior in continuous integration
 
 ## Installation
 

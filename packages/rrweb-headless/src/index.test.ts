@@ -35,6 +35,17 @@ describe('rrweb-headless e2e', () => {
       console.error('Error checking extension files:', error);
     }
 
+    // Prepare user data directory for persistent context
+    const userDataDir = path.resolve(__dirname, '../../../.playwright-data');
+    console.log('User data directory:', userDataDir);
+
+    try {
+      // Ensure the directory exists
+      await fs.mkdir(userDataDir, { recursive: true });
+    } catch (error) {
+      console.error('Error creating user data directory:', error);
+    }
+
     // Run the replay with actual events and check for z-modal
     const result = await runRrwebReplay({
       events: testEvents,
@@ -43,6 +54,10 @@ describe('rrweb-headless e2e', () => {
       timeout: isDebugMode ? 0 : 10000,
       // Force headless mode to false for better debugging
       headless: false,
+      // Use persistent profile
+      userDataDir: userDataDir,
+      // Explicitly specify the chromium channel
+      channel: 'chromium',
       chromiumArgs: [
         `--disable-extensions-except=${extensionPath}`,
         `--load-extension=${extensionPath}`,
@@ -113,11 +128,20 @@ describe('rrweb-headless e2e', () => {
         }
       }
 
-      const browser = result.page.context().browser();
+      // Get context and browser before closing the page
+      const context = result.page.context();
+      const browser = context.browser();
+
+      // Close page first
       await result.page.close();
-      if (browser) {
-        await browser.close();
-      }
+
+      // When using persistent context, we close the context instead of the browser
+      // We do this if we're in a normal test and not in debug mode
+      await context.close();
+      console.log('Browser context closed');
+
+      // We don't need to explicitly close the browser when using a persistent context
+      // as it's managed by the context itself
     } else if (isDebugMode && result.page) {
       console.log('Debug mode enabled - browser will remain open for inspection');
     }

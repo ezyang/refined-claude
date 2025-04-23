@@ -44,6 +44,18 @@ interface RrwebReplayOptions {
    * CSS selectors to check for existence
    */
   selectors?: string[];
+
+  /**
+   * Path to user data directory for persistent browser context
+   * If provided, a persistent context will be used instead of a regular browser instance
+   */
+  userDataDir?: string;
+
+  /**
+   * Which browser to use (default: undefined - use default)
+   * Set to 'chromium' to explicitly use the Chromium channel
+   */
+  channel?: string;
 }
 
 interface RrwebReplayResult {
@@ -78,7 +90,9 @@ export async function runRrwebReplay(options: RrwebReplayOptions): Promise<Rrweb
     playbackSpeed = 1,
     timeout = 30000,
     headless = true,
-    chromiumArgs = []
+    chromiumArgs = [],
+    userDataDir,
+    channel = 'chromium'
   } = options;
 
   // Allow overriding headless mode via environment variable
@@ -87,17 +101,24 @@ export async function runRrwebReplay(options: RrwebReplayOptions): Promise<Rrweb
 
   let browser: Browser | null = null;
   let page: Page | null = null;
+  let context;
 
   try {
     // Launch a browser with the specified headless mode, overridden by env var if present
     console.log(`Launching browser in ${effectiveHeadless ? 'headless' : 'headful'} mode${isDebugMode ? ' (debug mode enabled via SUBLIME_DEBUG)' : ''}`);
+    console.log(`Using browser channel: ${channel}`);
 
-    // Configure browser launch options
+    if (userDataDir) {
+      console.log(`Using persistent context with user data directory: ${userDataDir}`);
+    }
+
+    // Common launch options
     const launchOptions = {
       headless: effectiveHeadless,
       args: chromiumArgs,
       // When in debug mode, open with devtools console
-      devtools: isDebugMode
+      devtools: isDebugMode,
+      channel: channel
     };
 
     // In debug mode, log the configuration
@@ -105,11 +126,19 @@ export async function runRrwebReplay(options: RrwebReplayOptions): Promise<Rrweb
       console.log('Debug mode enabled: Opening browser with devtools console');
     }
 
-    // Launch the browser with the configured options
-    browser = await chromium.launch(launchOptions);
-
-    const context = await browser.newContext();
-    page = await context.newPage();
+    // Launch the browser based on whether we're using a persistent context or not
+    if (userDataDir) {
+      // Launch a persistent context
+      context = await chromium.launchPersistentContext(userDataDir, launchOptions);
+      page = await context.newPage();
+      // We can access the browser through the context
+      browser = context.browser();
+    } else {
+      // Launch a regular browser instance
+      browser = await chromium.launch(launchOptions);
+      context = await browser.newContext();
+      page = await context.newPage();
+    }
 
     // Setup page with rrweb player
     await setupRrwebPage(page, events, playbackSpeed);
@@ -186,7 +215,11 @@ export async function runRrwebReplay(options: RrwebReplayOptions): Promise<Rrweb
 
       // Don't close the browser if we're including the page in results
       // Let the caller handle closing it
-      if (browser && (!options.chromiumArgs || options.chromiumArgs.length === 0)) {
+      if (context && !options.userDataDir && (!options.chromiumArgs || options.chromiumArgs.length === 0)) {
+        // If using a persistent context, close the context instead of the browser
+        await context.close();
+      } else if (browser && (!options.chromiumArgs || options.chromiumArgs.length === 0)) {
+        // Otherwise close the browser if available
         await browser.close();
       }
     }
