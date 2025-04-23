@@ -19,7 +19,8 @@
     "test": "vitest run",
     "test:e2e": "vitest run --config vitest.e2e.config.ts",
     "test-replay": "tsx src/cli.ts",
-    "test-replay:debug": "tsx src/cli.ts --headful --timeout 0"
+    "test-replay:debug": "tsx src/cli.ts --headful --timeout 0",
+    "test-replay:devtools": "SUBLIME_DEBUG=1 tsx src/cli.ts"
   },
   "dependencies": {
     "@sublime-claude/extension": "0.1.0",

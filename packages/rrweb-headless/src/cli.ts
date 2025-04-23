@@ -87,10 +87,15 @@ function printHelp() {
     --selector <string>  CSS selector to check (can be used multiple times)
     --help, -h           Show this help information
 
+  Environment Variables:
+    SUBLIME_DEBUG=1      Enable debug mode - opens a headful browser with devtools
+                         console and keeps the browser open indefinitely
+
   Examples:
     test-rrweb events.json
     test-rrweb --speed 2 events.json
     test-rrweb --timeout 60000 --selector ".my-element" events.json
+    SUBLIME_DEBUG=1 test-rrweb events.json
   `);
 }
 

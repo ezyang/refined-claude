@@ -69,6 +69,9 @@ npx test-rrweb path/to/events.json
 
 # Run with custom settings
 npx test-rrweb --speed 2 --timeout 30000 --selector ".my-element" path/to/events.json
+
+# Run in debug mode with devtools console open
+SUBLIME_DEBUG=1 npx test-rrweb path/to/events.json
 ```
 
 #### CLI Options
@@ -80,7 +83,11 @@ npx test-rrweb --speed 2 --timeout 30000 --selector ".my-element" path/to/events
 - `--selector <string>`: CSS selector to check (can be used multiple times)
 - `--help`, `-h`: Show help information
 
-For debugging purposes, you can use `--timeout 0` to keep the browser open indefinitely (until you press Ctrl+C).
+#### Environment Variables
+
+- `SUBLIME_DEBUG=1`: Enable debug mode - opens a headful browser with devtools console open and keeps the browser open indefinitely
+
+For debugging purposes, you can use `--timeout 0` to keep the browser open indefinitely (until you press Ctrl+C), or set the `SUBLIME_DEBUG=1` environment variable to automatically open a browser with devtools.
 
 ## Installation
 
@@ -94,3 +101,4 @@ npm install @sublime-claude/rrweb-headless
 - `npm run dev`: Build in watch mode
 - `npm run test-replay`: Run the CLI with default settings
 - `npm run test-replay:debug`: Run in debug mode (headful, no timeout)
+- `npm run test-replay:devtools`: Run with SUBLIME_DEBUG=1 to open devtools console

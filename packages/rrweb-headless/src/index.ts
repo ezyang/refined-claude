@@ -92,11 +92,21 @@ export async function runRrwebReplay(options: RrwebReplayOptions): Promise<Rrweb
     // Launch a browser with the specified headless mode, overridden by env var if present
     console.log(`Launching browser in ${effectiveHeadless ? 'headless' : 'headful'} mode${isDebugMode ? ' (debug mode enabled via SUBLIME_DEBUG)' : ''}`);
 
-    // Add custom Chrome arguments if provided
-    browser = await chromium.launch({
+    // Configure browser launch options
+    const launchOptions = {
       headless: effectiveHeadless,
-      args: chromiumArgs
-    });
+      args: chromiumArgs,
+      // When in debug mode, open with devtools console
+      devtools: isDebugMode
+    };
+
+    // In debug mode, log the configuration
+    if (isDebugMode) {
+      console.log('Debug mode enabled: Opening browser with devtools console');
+    }
+
+    // Launch the browser with the configured options
+    browser = await chromium.launch(launchOptions);
 
     const context = await browser.newContext();
     page = await context.newPage();
