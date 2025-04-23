@@ -519,8 +519,13 @@ async function setupRrwebPage(page: Page, events: eventWithTime[], playbackSpeed
         statusEl.textContent = \`Playing at \${${playbackSpeed}}x speed...\`;
         console.log('[RRWEB_STATUS] Playing at ' + ${playbackSpeed} + 'x speed');
 
-        // Start playback
-        replayer.play();
+        // Start playback, but give content script a chance to run first.
+        // The timeout here is empirically determined to ensure playback
+        // doesn't start until we've setup observers in the iframe
+        setTimeout(() => {
+          console.log('[RRWEB_STATUS] Starting playback');
+          replayer.play();
+        }, 100);
 
         // Periodically check player positioning and fix if needed
         let positionInterval = setInterval(ensurePlayerCentered, 1000);
@@ -599,9 +604,13 @@ async function setupRrwebPage(page: Page, events: eventWithTime[], playbackSpeed
   const serverUrl = `http://localhost:${server.port}`;
   console.log(`🌐 Replay server: ${serverUrl}`);
 
-  // Start navigation but don't wait for it to complete
+  // Start navigation but don't wait for it to complete.
+  // TODO: In fact, this navigation never "completes", need
+  // to reconfigure Playwright call so that it treats DOM initialization
   const navigationPromise = page.goto(serverUrl, { timeout: 0 }).catch(err => {
-    console.error(`❌ Navigation error: ${err.message}`);
+    if (!err.message.includes("page.goto: Target page, context or browser has been closed")) {
+      console.error(`❌ Navigation error: ${err.message}`);
+    }
   });
 
   // Set up console listener immediately without waiting for navigation to complete
