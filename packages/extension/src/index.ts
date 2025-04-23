@@ -129,6 +129,125 @@ function setupModalObserver(): void {
 }
 
 /**
+ * Set up MutationObserver to watch for iframe elements in rrweb replay
+ */
+function setupIframeObserver(): void {
+  console.log('Setting up iframe observer for rrweb replay');
+
+  // Maintain a record of processed iframes to avoid duplicates
+  const processedIframes = new Set<string>();
+
+  // Create a MutationObserver to watch for iframe additions to the DOM
+  const observer = new MutationObserver((mutations) => {
+    for (const mutation of mutations) {
+      if (mutation.addedNodes.length > 0) {
+        for (const node of Array.from(mutation.addedNodes)) {
+          if (node instanceof HTMLIFrameElement) {
+            injectContentScriptIntoIframe(node, processedIframes);
+          } else if (node instanceof HTMLElement) {
+            // Check for iframes within the added node
+            const iframes = node.querySelectorAll('iframe');
+            iframes.forEach(iframe => injectContentScriptIntoIframe(iframe, processedIframes));
+          }
+        }
+      }
+    }
+  });
+
+  // Configure the observer to watch for additions of nodes
+  observer.observe(document.body, {
+    childList: true,
+    subtree: true
+  });
+
+  // Also check for any existing iframes
+  const existingIframes = document.querySelectorAll('iframe');
+  existingIframes.forEach(iframe => injectContentScriptIntoIframe(iframe, processedIframes));
+
+  console.log('Iframe observer set up');
+}
+
+/**
+ * Inject the content script into an iframe using the background script
+ */
+function injectContentScriptIntoIframe(iframe: HTMLIFrameElement, processedIframes: Set<string>): void {
+  // Generate a unique identifier for the iframe
+  let iframeId: string;
+  try {
+    // Try to use src as identifier if available
+    iframeId = iframe.src || `iframe-${Math.random().toString(36).substring(2, 11)}`;
+  } catch (e) {
+    // Fallback to random ID if we can't access src (e.g., cross-origin)
+    iframeId = `iframe-${Math.random().toString(36).substring(2, 11)}`;
+  }
+
+  // Skip if we've already processed this iframe
+  if (processedIframes.has(iframeId)) {
+    console.log('Content script already processed for this iframe:', iframeId);
+    return;
+  }
+
+  console.log('Attempting to inject content script into iframe:', iframeId);
+
+  // Mark this iframe as processed
+  processedIframes.add(iframeId);
+
+  // Ensure the iframe is loaded before trying to inject scripts
+  if (!iframe.contentWindow) {
+    console.log('Iframe not fully loaded yet, setting up load listener');
+    iframe.addEventListener('load', () => {
+      injectContentScriptIntoIframe(iframe, processedIframes);
+    });
+    return;
+  }
+
+  try {
+    // Add a unique identifier to the iframe to target it later
+    const frameSelector = `frame-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+    iframe.setAttribute('data-extension-frame-id', frameSelector);
+
+    // First get the current tab ID
+    chrome.runtime.sendMessage({ action: 'getTabInfo' }, (response) => {
+      if (chrome.runtime.lastError) {
+        console.error('Error getting tab info:', chrome.runtime.lastError);
+        return;
+      }
+
+      if (response.error) {
+        console.error('Error from background script:', response.error);
+        return;
+      }
+
+      const tabId = response.tabId;
+      console.log('Got tab ID:', tabId, 'for iframe injection');
+
+      // Now ask the background script to inject into the specific frame
+      chrome.runtime.sendMessage(
+        {
+          action: 'injectScriptIntoFrame',
+          tabId,
+          frameSelector
+        },
+        (injectionResponse) => {
+          if (chrome.runtime.lastError) {
+            console.error('Error during script injection:', chrome.runtime.lastError);
+            return;
+          }
+
+          if (injectionResponse.error) {
+            console.error('Injection error from background script:', injectionResponse.error);
+          } else {
+            console.log('Successfully injected script into iframe:', injectionResponse);
+          }
+        }
+      );
+    });
+  } catch (error) {
+    console.error('Error during iframe content script injection setup:', error);
+  }
+}
+
+/**
  * Check if the current frame is an iframe inside an rrweb replay environment
  */
 function isIframeInsideRrwebReplay(): boolean {
@@ -175,7 +294,10 @@ function init(): void {
     // Set up observer for future changes
     setupModalObserver();
   } else {
-    console.log('Skipping observer setup in top-level rrweb replay environment');
+    console.log('Skipping modal observer setup in top-level rrweb replay environment');
+
+    // In top-level rrweb replay environment, we need to inject our script into iframes
+    setupIframeObserver();
   }
 }
 
@@ -183,4 +305,4 @@ function init(): void {
 init();
 
 // Export for testing
-export { findAndClickAllowButton, checkIfRrwebReplay, isIframeInsideRrwebReplay };
+export { findAndClickAllowButton, checkIfRrwebReplay, isIframeInsideRrwebReplay, injectContentScriptIntoIframe };
