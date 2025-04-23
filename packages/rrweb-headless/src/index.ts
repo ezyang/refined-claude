@@ -169,6 +169,7 @@ export async function runRrwebReplay(options: RrwebReplayOptions): Promise<Rrweb
         });
 
         // Wait for either completion or timeout
+        console.log(`Will wait ${timeout}ms for test to complete`);
         await Promise.race([
           // Wait for console message indicating completion
           new Promise(resolve => {
@@ -551,13 +552,20 @@ async function setupRrwebPage(page: Page, events: eventWithTime[], playbackSpeed
   // Navigate to the local server URL
   const serverUrl = `http://localhost:${server.port}`;
   console.log(`Navigating to replay server at ${serverUrl}`);
-  await page.goto(serverUrl, { timeout: 0 }); // Disable timeout to prevent TimeoutError
 
-  // Additional logging to help debug extension content script issues
-  console.log('Page loaded, adding console listener for extension logs');
+  // Start navigation but don't wait for it to complete
+  const navigationPromise = page.goto(serverUrl, { timeout: 0 }).catch(err => {
+    console.error(`Navigation error (handled): ${err.message}`);
+  });
+
+  // Set up console listener immediately without waiting for navigation to complete
+  console.log('Adding console listener for extension logs');
   page.on('console', msg => {
     console.log(`Browser console [${msg.type()}]: ${msg.text()}`);
   });
+
+  // Fire and forget - don't wait for navigation to complete
+  // This allows us to continue with other operations without being blocked
 
   // Store the server in the page object for cleanup later
   // @ts-ignore - Adding custom property to store server reference
