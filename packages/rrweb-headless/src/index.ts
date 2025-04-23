@@ -100,11 +100,10 @@ export async function runRrwebReplay(options: RrwebReplayOptions): Promise<Rrweb
 
   try {
     // Launch a browser with the specified headless mode, overridden by env var if present
-    console.log(`Launching browser in ${effectiveHeadless ? 'headless' : 'headful'} mode${isDebugMode ? ' (debug mode enabled via SUBLIME_DEBUG)' : ''}`);
-    console.log(`Using browser channel: ${channel}`);
+    console.log(`🌐 Browser: ${effectiveHeadless ? 'headless' : 'headful'} mode, channel: ${channel}`);
 
     if (userDataDir) {
-      console.log(`Using persistent context with user data directory: ${userDataDir}`);
+      console.log(`📂 User data directory: ${userDataDir}`);
     }
 
     // Common launch options
@@ -118,7 +117,7 @@ export async function runRrwebReplay(options: RrwebReplayOptions): Promise<Rrweb
 
     // In debug mode, log the configuration
     if (isDebugMode) {
-      console.log('Debug mode enabled: Opening browser with devtools console');
+      console.log('🔍 Debug mode enabled with devtools');
     }
 
     // Launch the browser based on whether we're using a persistent context or not
@@ -140,7 +139,7 @@ export async function runRrwebReplay(options: RrwebReplayOptions): Promise<Rrweb
 
     // If timeout is 0 or debug mode is on, we don't close the browser automatically
     if (timeout === 0 || isDebugMode) {
-      console.log(`Browser will remain open ${isDebugMode ? '(debug mode)' : '(timeout=0)'}. Press Ctrl+C to exit.`);
+      console.log(`🔍 Browser will remain open. Press Ctrl+C to exit.`);
 
       // Wait indefinitely (until the process is killed)
       // Note: This will keep the process running
@@ -152,10 +151,14 @@ export async function runRrwebReplay(options: RrwebReplayOptions): Promise<Rrweb
         let isCompleted = false;
         let replayError: string | undefined = undefined;
 
-        // Set up console message listener
+        // Set up console message listener for status tracking
         page.on('console', async (msg) => {
           const text = msg.text();
-          console.log(`Browser console: ${text}`);
+
+          // Only handle rrweb status messages here (other console messages are handled by the main listener)
+          if (!text.includes('[RRWEB_')) {
+            return;
+          }
 
           // Check for completion message
           if (text.includes('[RRWEB_COMPLETE]')) {
@@ -174,7 +177,7 @@ export async function runRrwebReplay(options: RrwebReplayOptions): Promise<Rrweb
         });
 
         // Wait for either completion or timeout
-        console.log(`Will wait ${timeout}ms for test to complete`);
+        console.log(`⏱️ Waiting ${timeout}ms for replay to complete`);
         let checkInterval: ReturnType<typeof setInterval> | null = null;
         let timeoutId: ReturnType<typeof setTimeout> | null = null;
 
@@ -594,17 +597,33 @@ async function setupRrwebPage(page: Page, events: eventWithTime[], playbackSpeed
 
   // Navigate to the local server URL
   const serverUrl = `http://localhost:${server.port}`;
-  console.log(`Navigating to replay server at ${serverUrl}`);
+  console.log(`🌐 Replay server: ${serverUrl}`);
 
   // Start navigation but don't wait for it to complete
   const navigationPromise = page.goto(serverUrl, { timeout: 0 }).catch(err => {
-    console.error(`Navigation error (handled): ${err.message}`);
+    console.error(`❌ Navigation error: ${err.message}`);
   });
 
   // Set up console listener immediately without waiting for navigation to complete
-  console.log('Adding console listener for extension logs');
+  console.log('🔊 Setting up console logger');
   page.on('console', msg => {
-    console.log(`Browser console [${msg.type()}]: ${msg.text()}`);
+    // Filter out CORS errors and resource loading failures to reduce noise
+    const text = msg.text();
+    if (text.includes('Access to font') && text.includes('has been blocked by CORS policy')) {
+      return;
+    }
+    if (text.includes('Failed to load resource: net::ERR_FAILED')) {
+      return; // Filter out all ERR_FAILED errors, not just for fonts
+    }
+
+    // Format console messages by type
+    if (msg.type() === 'error') {
+      console.error(`Browser error: ${text}`);
+    } else if (msg.type() === 'warning') {
+      console.warn(`Browser warning: ${text}`);
+    } else {
+      console.log(`Browser: ${text}`);
+    }
   });
 
   // Fire and forget - don't wait for navigation to complete

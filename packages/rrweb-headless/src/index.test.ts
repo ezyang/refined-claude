@@ -18,37 +18,40 @@ describe('rrweb-headless e2e', () => {
     expect(testEvents);
     expect(testEvents.length !== 0);
 
+    // 🔄 Test setup
+    console.log('🔄 TEST MILESTONE: Setup started');
+
     // Path to our extension
     const extensionPath = path.resolve(__dirname, '../../extension/dist');
-    console.log('Loading extension from:', extensionPath);
 
     // Verify extension files exist
     try {
       const manifestPath = path.join(extensionPath, 'manifest.json');
-      const manifestExists = await fs.access(manifestPath).then(() => true).catch(() => false);
-      console.log('Extension manifest exists:', manifestExists);
-
       const contentScriptPath = path.join(extensionPath, 'index.js');
+
+      const manifestExists = await fs.access(manifestPath).then(() => true).catch(() => false);
       const contentScriptExists = await fs.access(contentScriptPath).then(() => true).catch(() => false);
-      console.log('Content script exists:', contentScriptExists);
+
+      if (!manifestExists || !contentScriptExists) {
+        console.warn('⚠️ Extension files check:',
+          manifestExists ? '✓ manifest.json' : '✗ manifest.json missing',
+          contentScriptExists ? '✓ index.js' : '✗ index.js missing');
+      }
     } catch (error) {
-      console.error('Error checking extension files:', error);
+      console.error('❌ Error checking extension files:', error);
     }
 
     // Prepare user data directory for persistent context
     const userDataDir = path.resolve(__dirname, '../../../.playwright-data');
-    console.log('User data directory:', userDataDir);
-
     try {
-      // Ensure the directory exists
       await fs.mkdir(userDataDir, { recursive: true });
     } catch (error) {
-      console.error('Error creating user data directory:', error);
+      console.error('❌ Error creating user data directory:', error);
     }
 
-    // Run the replay with actual events and check for z-modal
-    const testTimeout = isDebugMode ? 0 : 25000; // Set to 25 seconds (slightly less than test timeout of 30s)
-    console.log(`Using replay timeout of ${testTimeout}ms`);
+    // Configure test timeout
+    const testTimeout = isDebugMode ? 0 : 25000; // 25 seconds (less than test timeout of 30s)
+    console.log('🔄 TEST MILESTONE: Setup completed');
 
     const result = await runRrwebReplay({
       events: testEvents,
@@ -68,22 +71,20 @@ describe('rrweb-headless e2e', () => {
       ]
     });
 
-    // Log detailed results
-    console.log('E2E test results:', JSON.stringify(result, null, 2));
+    // Log test milestones with consistent formatting
+    console.log('🔍 TEST MILESTONE: Result object received');
 
     // Verify results (the actual assertion may vary based on your test data)
     expect(result).toBeDefined();
-    console.log('=== TEST MILESTONE: Result object received ===');
 
     // Check the new fields
     expect(typeof result.replayCompleted).toBe('boolean');
     if (result.error) {
-      console.error('Replay error:', result.error);
+      console.error('❌ TEST ERROR:', result.error);
     }
 
-    // For the console.log approach, we've already captured all messages through the page.on('console') handler
-    // Let's log the result directly
-    console.log('=== TEST MILESTONE: Replay completed status:', result.replayCompleted, ' ===');
+    // Show condensed results
+    console.log('📊 TEST RESULTS: Replay completed:', result.replayCompleted);
 
     // We can still check for specific elements if needed
     const allowButtonClicked = await result.page?.evaluate(() => {
@@ -122,7 +123,7 @@ describe('rrweb-headless e2e', () => {
     // Clean up resources - skip if in debug mode
     if (result.page && !isDebugMode) {
       try {
-        console.log('=== TEST MILESTONE: Starting cleanup ===');
+        console.log('🧹 TEST MILESTONE: Cleanup started');
 
         // Use a short timeout for cleanup operations to prevent hanging
         const cleanupTimeout = 5000; // 5 seconds max
@@ -136,45 +137,27 @@ describe('rrweb-headless e2e', () => {
               server.close(),
               new Promise(r => setTimeout(r, cleanupTimeout / 3))
             ]);
-            console.log('Replay server closed from test or timed out');
           } catch (err) {
-            console.error('Error closing replay server from test:', err);
+            console.error('❌ Error closing replay server:', err);
           }
         }
 
         // Get context before closing the page
         const context = result.page.context();
 
-        // Close page first with timeout
+        // Close page and context with timeout
         try {
-          await Promise.race([
-            result.page.close(),
-            new Promise(r => setTimeout(r, cleanupTimeout / 3))
-          ]);
-          console.log('Page closed or timed out');
+          await Promise.race([result.page.close(), new Promise(r => setTimeout(r, cleanupTimeout / 3))]);
+          await Promise.race([context.close(), new Promise(r => setTimeout(r, cleanupTimeout / 3))]);
+          console.log('🧹 TEST MILESTONE: Cleanup completed');
         } catch (err) {
-          console.error('Error closing page:', err);
+          console.error('❌ Error closing browser resources:', err);
         }
-
-        // When using persistent context, we close the context instead of the browser
-        // We do this if we're in a normal test and not in debug mode
-        try {
-          await Promise.race([
-            context.close(),
-            new Promise(r => setTimeout(r, cleanupTimeout / 3))
-          ]);
-          console.log('Browser context closed or timed out');
-        } catch (err) {
-          console.error('Error closing context:', err);
-        }
-
-        console.log('=== TEST MILESTONE: Cleanup completed ===');
-
       } catch (err) {
-        console.error('Error during cleanup (suppressed):', err);
+        console.error('❌ Error during cleanup:', err);
       }
     } else if (isDebugMode && result.page) {
-      console.log('Debug mode enabled - browser will remain open for inspection');
+      console.log('🔍 Debug mode enabled - browser will remain open for inspection');
     }
   // In debug mode, use a very long timeout (effectively no timeout), otherwise use 60 seconds
   }, isDebugMode ? 24 * 60 * 60 * 1000 : 60_000); // Use 24 hours in debug mode
