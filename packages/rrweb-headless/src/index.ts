@@ -5,13 +5,8 @@ import * as fs from 'fs/promises';
 import * as path from 'path';
 import { createReplayServer } from './server.js';
 
-// Extend Window interface to include our custom properties
-declare global {
-  interface Window {
-    __REPLAY_FINISHED?: boolean;
-    __REPLAY_ERROR?: string;
-  }
-}
+// No need to extend Window interface anymore since we're using console.log
+// for communication instead of window properties
 
 interface RrwebReplayOptions {
   /**
@@ -153,14 +148,46 @@ export async function runRrwebReplay(options: RrwebReplayOptions): Promise<Rrweb
     } else {
       // Wait for replay to complete or timeout
       try {
-        // Wait for the replay finished flag to be set with a maximum timeout
+        // Listen for specific console.log messages to determine status
+        let isCompleted = false;
+        let replayError: string | undefined = undefined;
+
+        // Set up console message listener
+        page.on('console', async (msg) => {
+          const text = msg.text();
+          console.log(`Browser console: ${text}`);
+
+          // Check for completion message
+          if (text.includes('[RRWEB_COMPLETE]')) {
+            isCompleted = true;
+          }
+
+          // Check for error message
+          if (text.includes('[RRWEB_ERROR]')) {
+            replayError = text.replace('[RRWEB_ERROR]', '').trim();
+          }
+        });
+
+        // Wait for either completion or timeout
         await Promise.race([
-          page.waitForFunction(() => window.__REPLAY_FINISHED === true, { timeout }),
-          page.waitForFunction(() => window.__REPLAY_ERROR !== undefined, { timeout })
+          // Wait for console message indicating completion
+          new Promise(resolve => {
+            const checkInterval = setInterval(() => {
+              if (isCompleted || replayError) {
+                clearInterval(checkInterval);
+                resolve(true);
+              }
+            }, 100);
+          }),
+          // Timeout
+          new Promise((_, reject) => {
+            setTimeout(() => {
+              reject(new Error(`Timeout of ${timeout}ms exceeded`));
+            }, timeout);
+          })
         ]);
 
         // Check if there was an error
-        const replayError = await page.evaluate(() => window.__REPLAY_ERROR);
         if (replayError) {
           throw new Error(`Replay error: ${replayError}`);
         }
@@ -174,20 +201,12 @@ export async function runRrwebReplay(options: RrwebReplayOptions): Promise<Rrweb
       }
     }
 
-    // Check if the replay completed or errored out
-    let replayCompleted = false;
+    // For console.log based approach, status is determined by console messages
+    // If we get to this point and haven't thrown an error for timeout,
+    // the replay completed successfully
+    let replayCompleted = true;
     let error: string | undefined = undefined;
-    let elementExists = false;
-
-    try {
-      replayCompleted = await page.evaluate(() => window.__REPLAY_FINISHED === true);
-      error = await page.evaluate(() => window.__REPLAY_ERROR);
-
-      // Basic defaults for backward compatibility
-      elementExists = true;
-    } catch (evalError) {
-      console.error('Error evaluating replay status:', evalError);
-    }
+    let elementExists = true; // Basic defaults for backward compatibility
 
     // Expose the page object for testing purposes
     return {
@@ -372,15 +391,11 @@ async function setupRrwebPage(page: Page, events: eventWithTime[], playbackSpeed
     function showError(message) {
       errorEl.textContent = message;
       errorEl.style.display = 'block';
-      console.error(message);
+      console.error('[RRWEB_ERROR] ' + message);
     }
 
     // Flag as rrweb test environment to help extensions detect this context
     document.body.setAttribute('data-rrweb-test', 'true');
-
-    // Initialize global flags for replay status
-    window.__REPLAY_FINISHED = false;
-    window.__REPLAY_ERROR = undefined;
 
     // Helper function to ensure player is centered
     function ensurePlayerCentered() {
@@ -426,10 +441,11 @@ async function setupRrwebPage(page: Page, events: eventWithTime[], playbackSpeed
         if (!events || !events.length) {
           const errorMsg = 'No events provided';
           showError(errorMsg);
-          window.__REPLAY_ERROR = errorMsg;
           return;
         }
 
+        // Log initialization status
+        console.log('[RRWEB_STATUS] Loaded ' + events.length + ' events');
         statusEl.textContent = 'Loaded ' + events.length + ' events';
 
         // Create a clean container for the player
@@ -455,6 +471,7 @@ async function setupRrwebPage(page: Page, events: eventWithTime[], playbackSpeed
         ensurePlayerCentered();
 
         statusEl.textContent = \`Playing at \${${playbackSpeed}}x speed...\`;
+        console.log('[RRWEB_STATUS] Playing at ' + ${playbackSpeed} + 'x speed');
 
         // Start playback
         replayer.play();
@@ -475,21 +492,23 @@ async function setupRrwebPage(page: Page, events: eventWithTime[], playbackSpeed
             const currentStatusText = statusEl.textContent.split(' - ')[0];
             statusEl.textContent = currentStatusText + ' - Replay: ' + progress + '% (' + Math.floor(currentTime / 1000) + 's / ' + Math.floor(totalTime / 1000) + 's)';
 
+            // Log progress periodically
+            if (progress % 10 === 0) {
+              console.log('[RRWEB_PROGRESS] ' + progress + '%');
+            }
+
             // Check if replay is complete
             if (progress >= 100) {
-              window.__REPLAY_FINISHED = true;
               clearInterval(progressInterval);
               clearInterval(positionInterval);
               statusEl.textContent += ' - COMPLETE';
-              console.log('Replay completed');
+              console.log('[RRWEB_COMPLETE] Replay finished successfully');
             }
           }
         }, 500);
       } catch (err) {
         const errorMsg = 'Error initializing replayer: ' + err.message;
         showError(errorMsg);
-        console.error(err);
-        window.__REPLAY_ERROR = errorMsg;
       }
     });
   `;

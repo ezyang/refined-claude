@@ -77,8 +77,11 @@ describe('rrweb-headless e2e', () => {
       console.error('Replay error:', result.error);
     }
 
-    // After the replay, we should check if the allow button was detected
-    // This would require a new function to evaluate in the page context
+    // For the console.log approach, we've already captured all messages through the page.on('console') handler
+    // Let's log the result directly
+    console.log('Replay completed:', result.replayCompleted);
+
+    // We can still check for specific elements if needed
     const allowButtonClicked = await result.page?.evaluate(() => {
       return document.getElementById('allow-button-clicked-marker') !== null;
     });
