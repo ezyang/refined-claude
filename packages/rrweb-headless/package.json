@@ -17,6 +17,7 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "test:verbose": "vitest run --reporter verbose",
     "test:e2e": "vitest run --config vitest.e2e.config.ts",
     "test-replay": "tsx src/cli.ts",
     "test-replay:debug": "tsx src/cli.ts --headful --timeout 0",
