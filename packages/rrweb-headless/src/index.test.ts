@@ -52,8 +52,6 @@ describe('rrweb-headless e2e', () => {
       playbackSpeed: 4,
       // In debug mode, set timeout to 0 (browser stays open), otherwise use a shorter timeout for CI
       timeout: isDebugMode ? 0 : 10000,
-      // Force headless mode to false for better debugging
-      headless: false,
       // Use persistent profile
       userDataDir: userDataDir,
       // Explicitly specify the chromium channel
