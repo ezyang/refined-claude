@@ -532,7 +532,7 @@ async function setupRrwebPage(page: Page, events: eventWithTime[], playbackSpeed
   // Navigate to the local server URL
   const serverUrl = `http://localhost:${server.port}`;
   console.log(`Navigating to replay server at ${serverUrl}`);
-  await page.goto(serverUrl);
+  await page.goto(serverUrl, { timeout: 0 }); // Disable timeout to prevent TimeoutError
 
   // Additional logging to help debug extension content script issues
   console.log('Page loaded, adding console listener for extension logs');
