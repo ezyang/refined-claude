@@ -58,4 +58,4 @@ tmp
 testdata
 fixtures
 
-.playwright-data
+.playwright-data*
