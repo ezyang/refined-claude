@@ -15,8 +15,8 @@ describe('rrweb-headless e2e', () => {
     const testEvents = await loadEventsFromFile(testDataPath);
 
     // Skip if no test events were loaded
-    expect(testEvents);
-    expect(testEvents.length !== 0);
+    expect(testEvents).not.toBeUndefined();
+    expect(testEvents.length).not.toBe(0);
 
     // 🔄 Test setup
     console.log('🔄 TEST MILESTONE: Setup started');
@@ -83,7 +83,7 @@ describe('rrweb-headless e2e', () => {
       console.error('❌ TEST ERROR:', result.error);
     }
 
-    expect(result.logs.includes('[I-CONTENT] Clicking "Allow for this chat" button in iframe')).toEqual(true);
+    expect(result.logs.includes('[I-CONTENT] Clicking "Allow for this chat" button in iframe')).toBe(true);
 
     // Show condensed results
     console.log('📊 TEST RESULTS: Replay completed:', result.replayCompleted);
