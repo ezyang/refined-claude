@@ -69,6 +69,8 @@ interface RrwebReplayResult {
    */
   error: string | undefined;
 
+  logs: string[];
+
   /**
    * The Playwright page object (only available during testing)
    * This allows tests to perform additional evaluations on the page
@@ -137,6 +139,8 @@ export async function runRrwebReplay(options: RrwebReplayOptions): Promise<Rrweb
     // Setup page with rrweb player
     await setupRrwebPage(page, events, playbackSpeed);
 
+    let logs: string[] = [];
+
     // If timeout is 0 or debug mode is on, we don't close the browser automatically
     if (timeout === 0 || isDebugMode) {
       console.log(`[DRIVER] 🔍 Browser will remain open. Press Ctrl+C to exit.`);
@@ -154,6 +158,7 @@ export async function runRrwebReplay(options: RrwebReplayOptions): Promise<Rrweb
         // Set up console message listener for status tracking
         page.on('console', async (msg) => {
           const text = msg.text();
+          logs.push(text);
 
           // Check for completion message
           if (text.includes('[RRWEB] Replay finished successfully')) {
@@ -230,6 +235,7 @@ export async function runRrwebReplay(options: RrwebReplayOptions): Promise<Rrweb
       replayCompleted,
       error,
       elementExists,
+      logs,
       page: (timeout === 0 || isDebugMode) ? undefined : page // Only include page if not in infinite wait mode or debug mode
     };
   } finally {
@@ -596,7 +602,8 @@ async function setupRrwebPage(page: Page, events: eventWithTime[], playbackSpeed
     console.error(`[DRIVER] ❌ Navigation error: ${err.message}`);
   });
 
-  // Set up console listener immediately without waiting for navigation to complete
+  // TODO: There is a little bit of a race here as the page doesn't explicitly
+  // synchronize with us
   console.log('[DRIVER] 🔊 Setting up console logger');
   page.on('console', msg => {
     // Filter out CORS errors and resource loading failures to reduce noise
@@ -617,9 +624,6 @@ async function setupRrwebPage(page: Page, events: eventWithTime[], playbackSpeed
       console.log(`${text}`);
     }
   });
-
-  // Fire and forget - don't wait for navigation to complete
-  // This allows us to continue with other operations without being blocked
 
   // Store the server in the page object for cleanup later
   // @ts-ignore - Adding custom property to store server reference

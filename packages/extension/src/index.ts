@@ -53,30 +53,11 @@ function findAndClickAllowButton(): void {
     .find(button => button.textContent?.includes('Allow for this chat'));
 
   if (allowButton) {
-    console.log('[CONTENT] Found "Allow for this chat" button:', allowButton);
-
-    if (state.isRrwebReplay) {
-      // In test mode, don't actually click but mark for testing
-      console.log('[CONTENT] Test mode: Would click "Allow for this chat" button');
-
-      // Create a marker element that doesn't affect page layout
-      const marker = document.createElement('div');
-      marker.id = 'allow-button-clicked-marker';
-      marker.style.display = 'none';
-      marker.style.position = 'absolute';
-      marker.style.top = '-9999px';
-      marker.style.left = '-9999px';
-      marker.style.zIndex = '-1';
-      marker.style.pointerEvents = 'none';
-      marker.setAttribute('data-button-text', allowButton.textContent || 'Allow for this chat');
-
-      // Append to an existing non-visual element if possible or to body as a last resort
-      const container = document.head || document.body;
-      container.appendChild(marker);
-    } else {
-      // In normal mode, actually click the button
-      console.log('[CONTENT] Clicking "Allow for this chat" button');
+    console.log('[CONTENT] Clicking "Allow for this chat" button:', allowButton);
+    if (!state.isRrwebReplay) {
       allowButton.click();
+    } else {
+      console.log('[CONTENT] Skipped click due to rrweb replay');
     }
   } else {
     console.log('[CONTENT] Could not find "Allow for this chat" button in modal');

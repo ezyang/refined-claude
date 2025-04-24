@@ -83,15 +83,10 @@ describe('rrweb-headless e2e', () => {
       console.error('❌ TEST ERROR:', result.error);
     }
 
+    expect(result.logs.includes('[I-CONTENT] Clicking "Allow for this chat" button in iframe')).toEqual(true);
+
     // Show condensed results
     console.log('📊 TEST RESULTS: Replay completed:', result.replayCompleted);
-
-    // We can still check for specific elements if needed
-    const allowButtonClicked = await result.page?.evaluate(() => {
-      return document.getElementById('allow-button-clicked-marker') !== null;
-    });
-
-    console.log('Allow button clicked:', allowButtonClicked);
 
     // Check for extension state by injecting a test function
     if (result.page) {
