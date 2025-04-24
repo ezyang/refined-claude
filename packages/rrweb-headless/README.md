@@ -97,9 +97,40 @@ SUBLIME_DEBUG=1 npx test-rrweb path/to/events.json
 
 For debugging purposes, you can use `--timeout 0` to keep the browser open indefinitely (until you press Ctrl+C), or set the `SUBLIME_DEBUG=1` environment variable to automatically open a browser with devtools.
 
-### Using Persistent Browser Profiles
+### Browser Profiles
 
-You can use persistent browser profiles to maintain state between replay sessions:
+#### Fresh Profiles for Test Parallelization
+
+For testing, we recommend creating a fresh browser profile for each test run. This approach:
+- Ensures test isolation (no state leakage between tests)
+- Enables test parallelization (each test uses a unique profile)
+- Reloads extensions and background scripts each time
+
+```typescript
+// Create a unique temporary profile for this test run
+const userDataDir = path.resolve(
+  __dirname,
+  '.tmp-playwright',
+  `test-run-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`
+);
+
+// Ensure the directory exists
+await fs.mkdir(userDataDir, { recursive: true });
+
+// Use the fresh profile
+const result = await runRrwebReplay({
+  events,
+  userDataDir: userDataDir,
+  channel: 'chromium'
+});
+
+// Clean up the temporary directory afterward
+await fs.rm(userDataDir, { recursive: true, force: true });
+```
+
+#### Persistent Browser Profiles
+
+For debugging, you can use persistent browser profiles to maintain state between replay sessions:
 
 ```typescript
 // Create a persistent profile
@@ -116,7 +147,7 @@ const result = await runRrwebReplay({
 });
 ```
 
-Benefits of persistent profiles:
+Benefits of persistent profiles for debugging:
 - Browser state (cookies, local storage, etc.) is preserved between sessions
 - Faster startup time for subsequent sessions
 - Extensions state is maintained

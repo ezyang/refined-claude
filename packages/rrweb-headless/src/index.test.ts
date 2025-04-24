@@ -41,10 +41,11 @@ describe('rrweb-headless e2e', () => {
       console.error('❌ Error checking extension files:', error);
     }
 
-    // Prepare user data directory for persistent context
-    const userDataDir = path.resolve(__dirname, '../../../.playwright-data');
+    // Create a unique temporary user data directory for this test run
+    const userDataDir = path.resolve(__dirname, '../../../.tmp-playwright', `test-run-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`);
     try {
       await fs.mkdir(userDataDir, { recursive: true });
+      console.log(`🔄 Created fresh profile at: ${userDataDir}`);
     } catch (error) {
       console.error('❌ Error creating user data directory:', error);
     }
@@ -52,9 +53,6 @@ describe('rrweb-headless e2e', () => {
     // Configure test timeout
     const testTimeout = isDebugMode ? 0 : 25000; // 25 seconds (less than test timeout of 30s)
     console.log('🔄 TEST MILESTONE: Setup completed');
-
-    // TODO: It seems you need to do something explicit to reload the background
-    // thread JS.  One way is to always create a new playwright-data folder
     const result = await runRrwebReplay({
       events: testEvents,
       playbackSpeed: 4,
@@ -154,6 +152,17 @@ describe('rrweb-headless e2e', () => {
           console.log('🧹 TEST MILESTONE: Cleanup completed');
         } catch (err) {
           console.error('❌ Error closing browser resources:', err);
+        }
+
+        // Clean up the temporary user data directory
+        try {
+          // Only attempt to remove if not in debug mode
+          if (userDataDir.includes('.tmp-playwright')) {
+            console.log(`🧹 Removing temporary profile at: ${userDataDir}`);
+            await fs.rm(userDataDir, { recursive: true, force: true });
+          }
+        } catch (err) {
+          console.error('❌ Error removing temporary user data directory:', err);
         }
       } catch (err) {
         console.error('❌ Error during cleanup:', err);
