@@ -1,6 +1,8 @@
 // Content script for the Chrome extension
 // This script runs in the context of web pages and looks for .z-modal elements
 
+import { findAndClickAllowButton, setupModalObserver } from './utils/modalObserver';
+
 console.log('[CONTENT] Sublime Claude content script loaded! URL:', window.location.href);
 
 // Class to check if we're running in rrweb replay environment
@@ -35,97 +37,6 @@ function checkIfRrwebReplay(): boolean {
   const hasMarkerClass = document.documentElement.classList.contains(RRWEB_REPLAY_MARKER);
 
   return hasRrwebElements || hasTestMarkers || hasMarkerClass;
-}
-
-/**
- * Find and click the "Allow for this chat" button in a modal
- */
-function findAndClickAllowButton(): void {
-  // Find the modal
-  const modal = document.querySelector('.z-modal');
-  if (!modal) return;
-
-  // Log for debugging
-  console.log('[CONTENT] Found z-modal:', modal);
-
-  // Look for the button that contains "Allow for this chat" text
-  const allowButton = Array.from(modal.querySelectorAll('button'))
-    .find(button => button.textContent?.includes('Allow for this chat'));
-
-  if (allowButton) {
-    console.log('[CONTENT] Found "Allow for this chat" button:', allowButton);
-
-    if (state.isRrwebReplay) {
-      // In test mode, don't actually click but mark for testing
-      console.log('[CONTENT] Test mode: Would click "Allow for this chat" button');
-
-      // Create a marker element that doesn't affect page layout
-      const marker = document.createElement('div');
-      marker.id = 'allow-button-clicked-marker';
-      marker.style.display = 'none';
-      marker.style.position = 'absolute';
-      marker.style.top = '-9999px';
-      marker.style.left = '-9999px';
-      marker.style.zIndex = '-1';
-      marker.style.pointerEvents = 'none';
-      marker.setAttribute('data-button-text', allowButton.textContent || 'Allow for this chat');
-
-      // Append to an existing non-visual element if possible or to body as a last resort
-      const container = document.head || document.body;
-      container.appendChild(marker);
-    } else {
-      // In normal mode, actually click the button
-      console.log('[CONTENT] Clicking "Allow for this chat" button');
-      allowButton.click();
-    }
-  } else {
-    console.log('[CONTENT] Could not find "Allow for this chat" button in modal');
-  }
-}
-
-/**
- * Set up MutationObserver to watch for modal elements
- */
-function setupModalObserver(): void {
-  // Create a MutationObserver to watch for changes in the DOM
-  const observer = new MutationObserver((mutations) => {
-    // Check if we need to look for the modal after DOM changes
-    const shouldCheck = mutations.some(mutation => {
-      // If nodes were added, check if any of them have the class or contain elements with the class
-      if (mutation.addedNodes.length > 0) {
-        for (const node of Array.from(mutation.addedNodes)) {
-          if (node instanceof HTMLElement) {
-            if (node.classList?.contains('z-modal') || node.querySelector('.z-modal')) {
-              return true;
-            }
-          }
-        }
-      }
-
-      // If attributes were changed, check if the class was added
-      if (mutation.type === 'attributes' &&
-          mutation.attributeName === 'class' &&
-          mutation.target instanceof HTMLElement) {
-        return mutation.target.classList.contains('z-modal');
-      }
-
-      return false;
-    });
-
-    if (shouldCheck) {
-      findAndClickAllowButton();
-    }
-  });
-
-  // Configure the observer to watch for additions of nodes and changes to class attributes
-  observer.observe(document.body, {
-    childList: true,
-    subtree: true,
-    attributes: true,
-    attributeFilter: ['class']
-  });
-
-  console.log('[CONTENT] Modal observer set up');
 }
 
 /**
@@ -291,8 +202,14 @@ function init(): void {
   // 1. This is NOT a top-level rrweb replay environment, OR
   // 2. This is an iframe INSIDE an rrweb replay environment
   if (!state.isRrwebReplay || isIframeInReplay) {
+    // Check for existing modals
+    findAndClickAllowButton(state.isRrwebReplay, '[CONTENT]');
+
     // Set up observer for future changes
-    setupModalObserver();
+    setupModalObserver(
+      () => findAndClickAllowButton(state.isRrwebReplay, '[CONTENT]'),
+      '[CONTENT]'
+    );
   } else {
     console.log('[CONTENT] Skipping modal observer setup in top-level rrweb replay environment');
 
@@ -305,4 +222,4 @@ function init(): void {
 init();
 
 // Export for testing
-export { findAndClickAllowButton, checkIfRrwebReplay, isIframeInsideRrwebReplay, injectContentScriptIntoIframe };
+export { checkIfRrwebReplay, isIframeInsideRrwebReplay, injectContentScriptIntoIframe };

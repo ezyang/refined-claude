@@ -2,6 +2,9 @@
 // This script runs in the background and handles initialization and messaging
 console.log('Background script loaded');
 
+// Reference the global type definitions
+/// <reference path="./utils/global.d.ts" />
+
 // Add listener for extension installation
 chrome.runtime.onInstalled.addListener(() => {
   console.log('Extension installed');
@@ -28,15 +31,24 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       return true;
     }
 
-    // Execute script in the specified frame
+    // First inject our shared module into the frame
     chrome.scripting.executeScript({
       target: { tabId, allFrames: true },
-      func: executeInTargetFrame,
-      args: [frameSelector]
-    }).then(results => {
+      files: ['modalObserver.js']  // Path relative to extension root in the built output
+    })
+    .then(() => {
+      // Then inject our frame selector script that uses the shared module
+      return chrome.scripting.executeScript({
+        target: { tabId, allFrames: true },
+        func: executeInTargetFrame,
+        args: [frameSelector]
+      });
+    })
+    .then(results => {
       console.log('Script injection results:', results);
       sendResponse({ success: true, results });
-    }).catch(error => {
+    })
+    .catch(error => {
       console.error('Script injection error:', error);
       sendResponse({ error: error.message });
     });
@@ -55,78 +67,32 @@ function executeInTargetFrame(frameSelector: string): boolean {
 
     console.log('[I-CONTENT] Target frame identified, setting up modal observer');
 
-    // Function to find and click the "Allow for this chat" button
-    function findAndClickAllowButton(): void {
-      const modal = document.querySelector('.z-modal');
-      if (!modal) return;
+    // We expect the modalObserver module to be already injected
+    if (typeof window.findAndClickAllowButton === 'function' &&
+        typeof window.setupModalObserver === 'function') {
 
-      console.log('[I-CONTENT] Found z-modal in iframe:', modal);
+      // Check for existing modals first
+      window.findAndClickAllowButton(false, '[I-CONTENT]');
 
-      const allowButton = Array.from(modal.querySelectorAll('button'))
-        .find(button => button.textContent?.includes('Allow for this chat'));
+      // Set up observer for future modals
+      window.setupModalObserver(
+        () => window.findAndClickAllowButton(false, '[I-CONTENT]'),
+        '[I-CONTENT]'
+      );
 
-      if (allowButton) {
-        console.log('[I-CONTENT] Found "Allow for this chat" button in iframe:', allowButton);
-        console.log('[I-CONTENT] Clicking "Allow for this chat" button in iframe');
-        allowButton.click();
-      } else {
-        console.log('[I-CONTENT] Could not find "Allow for this chat" button in modal in iframe');
+      // Add a marker to avoid duplicate executions
+      if (!document.querySelector('#sublime-claude-content-script-injected')) {
+        const marker = document.createElement('div');
+        marker.id = 'sublime-claude-content-script-injected';
+        marker.style.display = 'none';
+        document.head.appendChild(marker);
       }
+
+      return true; // Successfully executed in target frame
+    } else {
+      console.error('[I-CONTENT] Modal observer module not found');
+      return false;
     }
-
-    // Set up observer for modal elements
-    function setupModalObserver(): void {
-      const observer = new MutationObserver((mutations) => {
-        const shouldCheck = mutations.some(mutation => {
-          if (mutation.addedNodes.length > 0) {
-            for (const node of Array.from(mutation.addedNodes)) {
-              if (node instanceof HTMLElement) {
-                if (node.classList?.contains('z-modal') || node.querySelector('.z-modal')) {
-                  return true;
-                }
-              }
-            }
-          }
-
-          if (mutation.type === 'attributes' &&
-              mutation.attributeName === 'class' &&
-              mutation.target instanceof HTMLElement) {
-            return mutation.target.classList.contains('z-modal');
-          }
-
-          return false;
-        });
-
-        if (shouldCheck) {
-          findAndClickAllowButton();
-        }
-      });
-
-      observer.observe(document.body, {
-        childList: true,
-        subtree: true,
-        attributes: true,
-        attributeFilter: ['class']
-      });
-
-      console.log('[I-CONTENT] Modal observer set up in iframe');
-    }
-
-    // Check for existing modals first
-    findAndClickAllowButton();
-
-    // Set up observer for future modals
-    setupModalObserver();
-
-    // Add a marker to avoid duplicate executions
-    if (!document.querySelector('#sublime-claude-content-script-injected')) {
-      const marker = document.createElement('div');
-      marker.id = 'sublime-claude-content-script-injected';
-      marker.style.display = 'none';
-      document.head.appendChild(marker);
-    }
-
-    return true; // Successfully executed in target frame
   }
 
   return false; // Not the target frame
