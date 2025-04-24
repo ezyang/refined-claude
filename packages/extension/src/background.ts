@@ -28,32 +28,46 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       return true;
     }
 
-    let frameId: number | undefined;
-    chrome.webNavigation.getAllFrames({ tabId }, (frames) => {
-      if (frames) {
-        for (const frame of frames) {
-          if (frame.getAttribute('data-extension-frame-id', frameSelector)) {
-            frameId = frame.frameId;
-          }
-        }
-      }
-    });
-
-    if (frameId === undefined) {
-      sendResponse({error: 'Frame selector invalid'});
-      return true;
-    }
-
-    // Execute script in the specified frame
+    // First, inject a content script into all frames to find the one with the desired selector
     chrome.scripting.executeScript({
-      target: { tabId, frameIds: [frameId] },
-      files: ["index.global.js"],
+      target: { tabId, allFrames: true },
+      func: (selector) => {
+        // Check if this frame has an element with the selector or is the frame itself
+        const hasSelector = selector === 'self' ||
+          (window.frameElement && window.frameElement.getAttribute('data-extension-frame-id') === selector);
+
+        // Return true if this is the target frame, along with the frameId
+        return {
+          isTargetFrame: hasSelector,
+          url: window.location.href
+        };
+      },
+      args: [frameSelector]
     }).then(results => {
-      console.log('Script injection results:', results);
-      sendResponse({ success: true, results });
+      // Find the frame that returned true for having the selector
+      const targetFrame = results.find(result => result.result && result.result.isTargetFrame);
+
+      if (!targetFrame) {
+        sendResponse({ error: 'Frame selector invalid' });
+        return;
+      }
+
+      const frameId = targetFrame.frameId;
+
+      // Execute script in the identified frame
+      chrome.scripting.executeScript({
+        target: { tabId, frameIds: [frameId] },
+        files: ["index.global.js"],
+      }).then(results => {
+        console.log('Script injection results:', results);
+        sendResponse({ success: true, results });
+      }).catch(error => {
+        console.error('Script injection error:', error);
+        sendResponse({ error: error.message });
+      });
     }).catch(error => {
-      console.error('Script injection error:', error);
-      sendResponse({ error: error.message });
+      console.error('Frame detection error:', error);
+      sendResponse({ error: `Frame detection failed: ${error.message}` });
     });
 
     return true; // Keep the message channel open for the async response
