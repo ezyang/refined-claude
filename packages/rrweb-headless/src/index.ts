@@ -592,10 +592,8 @@ async function setupRrwebPage(page: Page, events: eventWithTime[], playbackSpeed
   // Start navigation but don't wait for it to complete.
   // TODO: In fact, this navigation never "completes", need
   // to reconfigure Playwright call so that it treats DOM initialization
-  const navigationPromise = page.goto(serverUrl, { timeout: 0 }).catch(err => {
-    if (!err.message.includes("page.goto: Target page, context or browser has been closed")) {
-      console.error(`[DRIVER] ❌ Navigation error: ${err.message}`);
-    }
+  const navigationPromise = page.goto(serverUrl, { waitUntil: 'domcontentloaded' }).catch(err => {
+    console.error(`[DRIVER] ❌ Navigation error: ${err.message}`);
   });
 
   // Set up console listener immediately without waiting for navigation to complete
