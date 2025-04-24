@@ -36,11 +36,6 @@ interface RrwebReplayOptions {
   chromiumArgs?: string[];
 
   /**
-   * CSS selectors to check for existence
-   */
-  selectors?: string[];
-
-  /**
    * Path to user data directory for persistent browser context
    * If provided, a persistent context will be used instead of a regular browser instance
    */

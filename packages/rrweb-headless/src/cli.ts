@@ -10,7 +10,6 @@ let jsonFilePath: string | null = null;
 let headless = false; // Default to headful mode for debugging
 let playbackSpeed = 1;
 let timeout = 0; // Default to no timeout for debugging (browser stays open)
-let selectors: string[] = [];
 
 // Helper to check if a file exists
 async function fileExists(filePath: string): Promise<boolean> {
@@ -48,12 +47,6 @@ function parseArgs() {
         if (isNaN(timeout) || timeout < 0) {
           timeout = 0;
         }
-      }
-    } else if (arg === '--selector' && i + 1 < args.length) {
-      const nextArg = args[i + 1];
-      if (nextArg) {
-        ++i;
-        selectors.push(nextArg);
       }
     } else if (arg === '--help' || arg === '-h') {
       printHelp();
@@ -122,11 +115,6 @@ async function main() {
   console.log(`Playback speed: ${playbackSpeed}x`);
   console.log(`Timeout: ${timeout === 0 || isDebugMode ? 'none (browser will stay open)' : timeout + 'ms'}`);
 
-  if (selectors.length > 0) {
-    console.log('Checking for selectors:');
-    selectors.forEach(selector => console.log(`  - ${selector}`));
-  }
-
   try {
     // Load events from the JSON file
     const events = await loadEventsFromFile(resolvedPath);
@@ -144,7 +132,6 @@ async function main() {
       playbackSpeed,
       headless,
       timeout,
-      selectors
     });
 
     // When timeout is 0 or debug mode is on, this code won't be reached until the process is killed
@@ -156,10 +143,6 @@ async function main() {
         console.log('\nReplay completed successfully! ✓');
       } else {
         console.warn('\nReplay may not have fully completed before timeout.');
-      }
-
-      if (selectors.length > 0) {
-        console.log(`All selectors found: ${result.elementExists ? 'Yes ✓' : 'No ✗'}`);
       }
     }
   } catch (error) {
