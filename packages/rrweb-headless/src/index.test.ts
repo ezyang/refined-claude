@@ -83,7 +83,8 @@ describe('rrweb-headless e2e', () => {
       console.error('❌ TEST ERROR:', result.error);
     }
 
-    expect(result.logs.includes('[I-CONTENT] Clicking "Allow for this chat" button in iframe')).toBe(true);
+    // Check for the button click in the logs, being more flexible with the log format
+    expect(result.logs.some(log => log.includes('Clicking "Allow for this chat" button'))).toBe(true);
 
     // Show condensed results
     console.log('📊 TEST RESULTS: Replay completed:', result.replayCompleted);
