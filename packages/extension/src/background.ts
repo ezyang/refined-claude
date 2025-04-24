@@ -28,11 +28,26 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       return true;
     }
 
+    let frameId: number | undefined;
+    chrome.webNavigation.getAllFrames({ tabId }, (frames) => {
+      if (frames) {
+        for (const frame of frames) {
+          if (frame.getAttribute('data-extension-frame-id', frameSelector)) {
+            frameId = frame.frameId;
+          }
+        }
+      }
+    });
+
+    if (frameId === undefined) {
+      sendResponse({error: 'Frame selector invalid'});
+      return true;
+    }
+
     // Execute script in the specified frame
     chrome.scripting.executeScript({
-      target: { tabId, allFrames: true },
-      func: executeInTargetFrame,
-      args: [frameSelector]
+      target: { tabId, frameIds: [frameId] },
+      files: ["index.global.js"],
     }).then(results => {
       console.log('Script injection results:', results);
       sendResponse({ success: true, results });
