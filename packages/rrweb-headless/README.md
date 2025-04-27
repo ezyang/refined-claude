@@ -30,7 +30,7 @@ const result = await runRrwebReplay({
   // Use persistent browser profile (optional)
   userDataDir: path.resolve(__dirname, '.playwright-data'),
   // Explicitly use Chromium channel for consistent browser version
-  channel: 'chromium'
+  channel: 'chromium',
 });
 
 console.log(result.elementExists); // Whether all specified elements exist
@@ -85,6 +85,7 @@ For debugging purposes, you can use `--timeout 0` to keep the browser open indef
 #### Fresh Profiles for Test Parallelization
 
 For testing, we recommend creating a fresh browser profile for each test run. This approach:
+
 - Ensures test isolation (no state leakage between tests)
 - Enables test parallelization (each test uses a unique profile)
 - Reloads extensions and background scripts each time
@@ -104,7 +105,7 @@ await fs.mkdir(userDataDir, { recursive: true });
 const result = await runRrwebReplay({
   events,
   userDataDir: userDataDir,
-  channel: 'chromium'
+  channel: 'chromium',
 });
 
 // Clean up the temporary directory afterward
@@ -126,11 +127,12 @@ await fs.mkdir(userDataDir, { recursive: true });
 const result = await runRrwebReplay({
   events,
   userDataDir: userDataDir,
-  channel: 'chromium' // Explicitly use Chromium channel
+  channel: 'chromium', // Explicitly use Chromium channel
 });
 ```
 
 Benefits of persistent profiles for debugging:
+
 - Browser state (cookies, local storage, etc.) is preserved between sessions
 - Faster startup time for subsequent sessions
 - Extensions state is maintained
@@ -143,11 +145,12 @@ You can specify which browser channel to use:
 const result = await runRrwebReplay({
   events,
   // Use specific browser channel
-  channel: 'chromium' // 'chrome', 'msedge', etc.
+  channel: 'chromium', // 'chrome', 'msedge', etc.
 });
 ```
 
 Using the explicit channel provides:
+
 - Consistent browser version across environments
 - Better compatibility with certain extensions
 - More predictable behavior in continuous integration

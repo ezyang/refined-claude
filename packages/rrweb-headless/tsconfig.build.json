@@ -1,1 +1,12 @@
-{"extends": "../../tsconfig.base.json", "compilerOptions": {"outDir": "./dist", "rootDir": "./src", "incremental": false, "composite": false, "exactOptionalPropertyTypes": false, "typeRoots": ["./src/types", "./node_modules/@types"]}, "include": ["src/**/*"]}
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "incremental": false,
+    "composite": false,
+    "exactOptionalPropertyTypes": false,
+    "typeRoots": ["./src/types", "./node_modules/@types"]
+  },
+  "include": ["src/**/*"]
+}

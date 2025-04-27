@@ -5,6 +5,7 @@ This Chrome extension automatically clicks the 'Allow for this chat' button in m
 ## Development
 
 This is a Chrome Manifest V3 extension that uses:
+
 - TypeScript for type safety
 - tsup for bundling
 

@@ -4,6 +4,6 @@ export default defineConfig({
   test: {
     environment: 'node',
     includeSource: ['src/**/*.{js,ts}'],
-    reporters: ['verbose']
-  }
+    reporters: ['verbose'],
+  },
 });

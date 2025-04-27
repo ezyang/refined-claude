@@ -15,15 +15,15 @@ module.exports = {
       files: '*.json',
       options: {
         parser: 'json',
-        tabWidth: 2
-      }
+        tabWidth: 2,
+      },
     },
     {
       files: '*.jsonc',
       options: {
         parser: 'json',
-        tabWidth: 2
-      }
-    }
-  ]
+        tabWidth: 2,
+      },
+    },
+  ],
 };

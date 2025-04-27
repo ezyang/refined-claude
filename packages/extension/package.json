@@ -1,1 +1,24 @@
-{"name": "@sublime-claude/extension", "version": "0.1.0", "main": "dist/index.js", "module": "dist/index.mjs", "types": "dist/index.d.ts", "files": ["dist"], "scripts": {"prebuild": "mkdir -p dist", "build": "tsup && cp src/manifest.json dist/", "dev": "tsup --watch & cp src/manifest.json dist/", "lint": "eslint .", "typecheck": "tsc --noEmit"}, "dependencies": {"@types/chrome": "^0.0.260"}, "devDependencies": {"@typescript-eslint/eslint-plugin": "^7.0.0", "@typescript-eslint/parser": "^7.0.0", "eslint": "^8.56.0", "tsup": "^8.0.1", "typescript": "^5.3.3", "vitest": "^1.2.2"}}
+{
+  "name": "@sublime-claude/extension",
+  "version": "0.1.0",
+  "main": "dist/index.js",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.ts",
+  "files": ["dist"],
+  "scripts": {
+    "prebuild": "mkdir -p dist",
+    "build": "tsup && cp src/manifest.json dist/",
+    "dev": "tsup --watch & cp src/manifest.json dist/",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": { "@types/chrome": "^0.0.260" },
+  "devDependencies": {
+    "@typescript-eslint/eslint-plugin": "^7.0.0",
+    "@typescript-eslint/parser": "^7.0.0",
+    "eslint": "^8.56.0",
+    "tsup": "^8.0.1",
+    "typescript": "^5.3.3",
+    "vitest": "^1.2.2"
+  }
+}

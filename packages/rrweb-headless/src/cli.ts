@@ -113,7 +113,9 @@ async function main() {
   console.log(`Loading events from: ${resolvedPath}`);
   console.log(`Mode: ${headless ? 'headless' : 'headful'}${isDebugMode ? ' (debug mode)' : ''}`);
   console.log(`Playback speed: ${playbackSpeed}x`);
-  console.log(`Timeout: ${timeout === 0 || isDebugMode ? 'none (browser will stay open)' : timeout + 'ms'}`);
+  console.log(
+    `Timeout: ${timeout === 0 || isDebugMode ? 'none (browser will stay open)' : timeout + 'ms'}`
+  );
 
   try {
     // Load events from the JSON file

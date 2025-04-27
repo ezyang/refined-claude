@@ -23,7 +23,7 @@ export async function createReplayServer(): Promise<{
   });
 
   // Start the server on a random available port
-  await new Promise<void>((resolve) => {
+  await new Promise<void>(resolve => {
     server.listen(0, '127.0.0.1', () => {
       resolve();
     });
@@ -42,7 +42,7 @@ export async function createReplayServer(): Promise<{
     },
     close: () => {
       return new Promise<void>((resolve, reject) => {
-        server.close((err) => {
+        server.close(err => {
           if (err) {
             reject(err);
           } else {

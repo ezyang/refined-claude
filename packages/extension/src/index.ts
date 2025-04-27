@@ -13,7 +13,7 @@ interface ExtensionState {
 
 // Initialize state
 const state: ExtensionState = {
-  isRrwebReplay: false
+  isRrwebReplay: false,
 };
 
 /**
@@ -24,9 +24,10 @@ const state: ExtensionState = {
  */
 function checkIfRrwebReplay(): boolean {
   // Check for specific elements or attributes that indicate rrweb replay
-  const hasRrwebElements = !!document.getElementById('replay') ||
-                          !!document.querySelector('.replayer-wrapper') ||
-                          !!document.querySelector('.replayer-mirror');
+  const hasRrwebElements =
+    !!document.getElementById('replay') ||
+    !!document.querySelector('.replayer-wrapper') ||
+    !!document.querySelector('.replayer-mirror');
 
   // Look for our internal markers from the test environment
   const hasTestMarkers = !!document.body.getAttribute('data-rrweb-test');
@@ -49,8 +50,9 @@ function findAndClickAllowButton(): void {
   console.log('[CONTENT] Found z-modal:', modal);
 
   // Look for the button that contains "Allow for this chat" text
-  const allowButton = Array.from(modal.querySelectorAll('button'))
-    .find(button => button.textContent?.includes('Allow for this chat'));
+  const allowButton = Array.from(modal.querySelectorAll('button')).find(button =>
+    button.textContent?.includes('Allow for this chat')
+  );
 
   if (allowButton) {
     console.log('[CONTENT] Clicking "Allow for this chat" button:', allowButton);
@@ -69,7 +71,7 @@ function findAndClickAllowButton(): void {
  */
 function setupModalObserver(): void {
   // Create a MutationObserver to watch for changes in the DOM
-  const observer = new MutationObserver((mutations) => {
+  const observer = new MutationObserver(mutations => {
     // Check if we need to look for the modal after DOM changes
     const shouldCheck = mutations.some(mutation => {
       // If nodes were added, check if any of them have the class or contain elements with the class
@@ -84,9 +86,11 @@ function setupModalObserver(): void {
       }
 
       // If attributes were changed, check if the class was added
-      if (mutation.type === 'attributes' &&
-          mutation.attributeName === 'class' &&
-          mutation.target instanceof HTMLElement) {
+      if (
+        mutation.type === 'attributes' &&
+        mutation.attributeName === 'class' &&
+        mutation.target instanceof HTMLElement
+      ) {
         return mutation.target.classList.contains('z-modal');
       }
 
@@ -103,7 +107,7 @@ function setupModalObserver(): void {
     childList: true,
     subtree: true,
     attributes: true,
-    attributeFilter: ['class']
+    attributeFilter: ['class'],
   });
 
   console.log('[CONTENT] Modal observer set up');
@@ -119,7 +123,7 @@ function setupIframeObserver(): void {
   const processedIframes = new Set<string>();
 
   // Create a MutationObserver to watch for iframe additions to the DOM
-  const observer = new MutationObserver((mutations) => {
+  const observer = new MutationObserver(mutations => {
     for (const mutation of mutations) {
       if (mutation.addedNodes.length > 0) {
         for (const node of Array.from(mutation.addedNodes)) {
@@ -138,7 +142,7 @@ function setupIframeObserver(): void {
   // Configure the observer to watch for additions of nodes
   observer.observe(document.body, {
     childList: true,
-    subtree: true
+    subtree: true,
   });
 
   // Also check for any existing iframes
@@ -151,7 +155,10 @@ function setupIframeObserver(): void {
 /**
  * Inject the content script into an iframe using the background script
  */
-function injectContentScriptIntoIframe(iframe: HTMLIFrameElement, processedIframes: Set<string>): void {
+function injectContentScriptIntoIframe(
+  iframe: HTMLIFrameElement,
+  processedIframes: Set<string>
+): void {
   // Generate a unique identifier for the iframe
   let iframeId: string;
   try {
@@ -188,7 +195,7 @@ function injectContentScriptIntoIframe(iframe: HTMLIFrameElement, processedIfram
     iframe.setAttribute('data-extension-frame-id', frameSelector);
 
     // First get the current tab ID
-    chrome.runtime.sendMessage({ action: 'getTabInfo' }, (response) => {
+    chrome.runtime.sendMessage({ action: 'getTabInfo' }, response => {
       if (chrome.runtime.lastError) {
         console.error('Error getting tab info:', chrome.runtime.lastError);
         return;
@@ -207,9 +214,9 @@ function injectContentScriptIntoIframe(iframe: HTMLIFrameElement, processedIfram
         {
           action: 'injectScriptIntoFrame',
           tabId,
-          frameSelector
+          frameSelector,
         },
-        (injectionResponse) => {
+        injectionResponse => {
           if (chrome.runtime.lastError) {
             console.error('Error during script injection:', chrome.runtime.lastError);
             return;
@@ -239,13 +246,14 @@ function isIframeInsideRrwebReplay(): boolean {
 
   // Check if the parent window shows signs of being a replay environment
   try {
-    return !!(window.parent && (
-      window.parent.document.getElementById('replay') ||
-      window.parent.document.querySelector('.replayer-wrapper') ||
-      window.parent.document.querySelector('.replayer-mirror') ||
-      window.parent.document.body.getAttribute('data-rrweb-test') ||
-      window.parent.document.documentElement.classList.contains(RRWEB_REPLAY_MARKER)
-    ));
+    return !!(
+      window.parent &&
+      (window.parent.document.getElementById('replay') ||
+        window.parent.document.querySelector('.replayer-wrapper') ||
+        window.parent.document.querySelector('.replayer-mirror') ||
+        window.parent.document.body.getAttribute('data-rrweb-test') ||
+        window.parent.document.documentElement.classList.contains(RRWEB_REPLAY_MARKER))
+    );
   } catch (e) {
     // If we can't access the parent due to cross-origin restrictions
     console.log('[CONTENT] Cannot access parent frame, assuming not in replay:', e);
@@ -286,4 +294,9 @@ function init(): void {
 init();
 
 // Export for testing
-export { findAndClickAllowButton, checkIfRrwebReplay, isIframeInsideRrwebReplay, injectContentScriptIntoIframe };
+export {
+  findAndClickAllowButton,
+  checkIfRrwebReplay,
+  isIframeInsideRrwebReplay,
+  injectContentScriptIntoIframe,
+};

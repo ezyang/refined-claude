@@ -84,7 +84,7 @@ export async function runRrwebReplay(options: RrwebReplayOptions): Promise<Rrweb
     headless = true,
     chromiumArgs = [],
     userDataDir,
-    channel = 'chromium'
+    channel = 'chromium',
   } = options;
 
   // Allow overriding headless mode via environment variable
@@ -97,7 +97,9 @@ export async function runRrwebReplay(options: RrwebReplayOptions): Promise<Rrweb
 
   try {
     // Launch a browser with the specified headless mode, overridden by env var if present
-    console.log(`[DRIVER] 🌐 Browser: ${effectiveHeadless ? 'headless' : 'headful'} mode, channel: ${channel}`);
+    console.log(
+      `[DRIVER] 🌐 Browser: ${effectiveHeadless ? 'headless' : 'headful'} mode, channel: ${channel}`
+    );
 
     if (userDataDir) {
       console.log(`[DRIVER] 📂 User data directory: ${userDataDir}`);
@@ -109,7 +111,7 @@ export async function runRrwebReplay(options: RrwebReplayOptions): Promise<Rrweb
       args: chromiumArgs,
       // When in debug mode, open with devtools console
       devtools: isDebugMode,
-      channel: channel
+      channel: channel,
     };
 
     // In debug mode, log the configuration
@@ -151,7 +153,7 @@ export async function runRrwebReplay(options: RrwebReplayOptions): Promise<Rrweb
         let replayError: string | undefined = undefined;
 
         // Set up console message listener for status tracking
-        page.on('console', async (msg) => {
+        page.on('console', async msg => {
           const text = msg.text();
           logs.push(text);
 
@@ -185,7 +187,7 @@ export async function runRrwebReplay(options: RrwebReplayOptions): Promise<Rrweb
               timeoutId = setTimeout(() => {
                 reject(new Error(`Timeout of ${timeout}ms exceeded`));
               }, timeout);
-            })
+            }),
           ]);
         } finally {
           // Ensure we clean up the timers even if Promise.race is interrupted
@@ -231,7 +233,7 @@ export async function runRrwebReplay(options: RrwebReplayOptions): Promise<Rrweb
       error,
       elementExists,
       logs,
-      page: (timeout === 0 || isDebugMode) ? undefined : page // Only include page if not in infinite wait mode or debug mode
+      page: timeout === 0 || isDebugMode ? undefined : page, // Only include page if not in infinite wait mode or debug mode
     };
   } finally {
     // Clean up - only if timeout is not 0 and debug mode is off
@@ -246,8 +248,10 @@ export async function runRrwebReplay(options: RrwebReplayOptions): Promise<Rrweb
           const server = page._replayServer;
           if (server) {
             await Promise.race([
-              server.close().catch((err: Error) => console.error('Error closing replay server:', err)),
-              new Promise(r => setTimeout(r, cleanupTimeout / 3))
+              server
+                .close()
+                .catch((err: Error) => console.error('Error closing replay server:', err)),
+              new Promise(r => setTimeout(r, cleanupTimeout / 3)),
             ]);
             console.log('[DRIVER] Replay server closed or timed out');
           }
@@ -255,18 +259,22 @@ export async function runRrwebReplay(options: RrwebReplayOptions): Promise<Rrweb
 
         // Don't close the browser if we're including the page in results
         // Let the caller handle closing it
-        if (context && !options.userDataDir && (!options.chromiumArgs || options.chromiumArgs.length === 0)) {
+        if (
+          context &&
+          !options.userDataDir &&
+          (!options.chromiumArgs || options.chromiumArgs.length === 0)
+        ) {
           // If using a persistent context, close the context instead of the browser with a timeout
           await Promise.race([
             context.close().catch((err: Error) => console.error('Error closing context:', err)),
-            new Promise(r => setTimeout(r, cleanupTimeout / 3))
+            new Promise(r => setTimeout(r, cleanupTimeout / 3)),
           ]);
           console.log('[DRIVER] Browser context closed or timed out');
         } else if (browser && (!options.chromiumArgs || options.chromiumArgs.length === 0)) {
           // Otherwise close the browser if available with a timeout
           await Promise.race([
             browser.close().catch((err: Error) => console.error('Error closing browser:', err)),
-            new Promise(r => setTimeout(r, cleanupTimeout / 3))
+            new Promise(r => setTimeout(r, cleanupTimeout / 3)),
           ]);
           console.log('[DRIVER] Browser closed or timed out');
         }
@@ -280,7 +288,11 @@ export async function runRrwebReplay(options: RrwebReplayOptions): Promise<Rrweb
 /**
  * Sets up the page with rrweb player and injects the events
  */
-async function setupRrwebPage(page: Page, events: eventWithTime[], playbackSpeed: number): Promise<void> {
+async function setupRrwebPage(
+  page: Page,
+  events: eventWithTime[],
+  playbackSpeed: number
+): Promise<void> {
   // Import rrweb and rrweb-player from node_modules
   const rrwebPath = require.resolve('rrweb/dist/rrweb.min.js');
   const rrwebContent = await fs.readFile(rrwebPath, 'utf-8');
