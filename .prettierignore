@@ -1,0 +1,22 @@
+# Build artifacts
+dist/
+build/
+.next/
+coverage/
+
+# Package manager files
+node_modules/
+.pnpm-store/
+pnpm-lock.yaml
+
+# Cache directories
+.turbo/
+.eslintcache
+.cache/
+
+# MacOS files
+.DS_Store
+
+# Editor directories
+.idea/
+.vscode/

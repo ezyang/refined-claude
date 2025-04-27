@@ -9,4 +9,21 @@ module.exports = {
   bracketSpacing: true,
   arrowParens: 'avoid',
   endOfLine: 'lf',
+  // Ensure JSON files are properly formatted
+  overrides: [
+    {
+      files: '*.json',
+      options: {
+        parser: 'json',
+        tabWidth: 2
+      }
+    },
+    {
+      files: '*.jsonc',
+      options: {
+        parser: 'json',
+        tabWidth: 2
+      }
+    }
+  ]
 };
