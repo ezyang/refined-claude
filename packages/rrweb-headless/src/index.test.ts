@@ -226,8 +226,8 @@ describe('rrweb-headless e2e', () => {
           result.logs.some(log => log.includes('Response state observer setup complete'))
         ).toBe(true);
 
-        // Check for state tracking
-        expect(result.logs.some(log => log.includes('Tracking button in state:'))).toBe(true);
+        // Check for state tracking (using the new log format)
+        expect(result.logs.some(log => log.includes('Response state changed:'))).toBe(true);
 
         // Check for state change detection
         expect(
