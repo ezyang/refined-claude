@@ -9,6 +9,98 @@ enum ResponseButtonState {
 }
 
 /**
+ * Favicon management
+ */
+interface FaviconState {
+  isModified: boolean;
+  currentIcon: 'original' | 'busy' | 'ping';
+}
+
+// Global state for favicon management
+const faviconState: FaviconState = {
+  isModified: false,
+  currentIcon: 'original',
+};
+
+/**
+ * Sets the favicon to the Claude busy icon
+ */
+function setClaudeBusyFavicon(): void {
+  if (faviconState.currentIcon === 'busy') return; // Already using busy icon
+
+  // Remove existing favicon links
+  const faviconElements = document.querySelectorAll('link[rel*="icon"]');
+  faviconElements.forEach(element => {
+    element.remove();
+  });
+
+  // Create a new link element with Claude busy icon
+  const link = document.createElement('link');
+  link.rel = 'icon';
+  link.href = chrome.runtime.getURL('images/claude-busy.ico');
+  link.type = 'image/x-icon';
+
+  // Add the link to the head
+  document.head.appendChild(link);
+
+  faviconState.isModified = true;
+  faviconState.currentIcon = 'busy';
+  console.log('[CONTENT] Set Claude busy favicon');
+}
+
+/**
+ * Sets the favicon to the Claude ping icon
+ */
+function setClaudePingFavicon(): void {
+  if (faviconState.currentIcon === 'ping') return; // Already using ping icon
+
+  // Remove existing favicon links
+  const faviconElements = document.querySelectorAll('link[rel*="icon"]');
+  faviconElements.forEach(element => {
+    element.remove();
+  });
+
+  // Create a new link element with Claude ping icon
+  const link = document.createElement('link');
+  link.rel = 'icon';
+  link.href = chrome.runtime.getURL('images/claude-ping.ico');
+  link.type = 'image/x-icon';
+
+  // Add the link to the head
+  document.head.appendChild(link);
+
+  faviconState.isModified = true;
+  faviconState.currentIcon = 'ping';
+  console.log('[CONTENT] Set Claude ping favicon');
+}
+
+/**
+ * Restores the original Claude favicon
+ */
+function restoreOriginalFavicon(): void {
+  if (faviconState.currentIcon === 'original') return; // Already using original icon
+
+  // Remove existing favicon links
+  const faviconElements = document.querySelectorAll('link[rel*="icon"]');
+  faviconElements.forEach(element => {
+    element.remove();
+  });
+
+  // Create a new link element with the original Claude favicon
+  const link = document.createElement('link');
+  link.rel = 'icon';
+  link.href = 'https://claude.ai/favicon.ico';
+  link.type = 'image/x-icon';
+
+  // Add the link to the head
+  document.head.appendChild(link);
+
+  faviconState.isModified = false;
+  faviconState.currentIcon = 'original';
+  console.log('[CONTENT] Restored original Claude favicon');
+}
+
+/**
  * Check if a button element is in the RUNNING state based on its attributes
  *
  * RUNNING state has these characteristics:
@@ -79,12 +171,27 @@ function evaluateCurrentResponseState() {
       `[CONTENT] Response state changed: ${currentOverallState ?? 'UNKNOWN'} → ${detectedState ?? 'UNKNOWN'}`
     );
 
-    // Trigger notification specifically for RUNNING -> STOPPED transition
+    // Handle STOPPED -> RUNNING transition
+    if (
+      currentOverallState === ResponseButtonState.STOPPED &&
+      detectedState === ResponseButtonState.RUNNING
+    ) {
+      console.log('[CONTENT] Claude is generating a response.');
+
+      // Change favicon to Claude busy icon when response starts
+      setClaudeBusyFavicon();
+    }
+
+    // Handle RUNNING -> STOPPED transition
     if (
       currentOverallState === ResponseButtonState.RUNNING &&
       detectedState === ResponseButtonState.STOPPED
     ) {
       console.log('[CONTENT] Sending Response Complete notification.');
+
+      // Change favicon to Claude ping icon when response completes
+      setClaudePingFavicon();
+
       // Use try-catch for message sending as context might become invalid
       try {
         chrome.runtime.sendMessage({
@@ -99,6 +206,33 @@ function evaluateCurrentResponseState() {
 
     // Update the tracked state
     currentOverallState = detectedState;
+  }
+}
+
+/**
+ * Checks if the Send message button is visible
+ */
+function isSendMessageButtonVisible(): boolean {
+  const sendButtons = document.querySelectorAll('button[aria-label="Send message"]');
+  for (const btn of sendButtons) {
+    if (document.body.contains(btn) && isButtonInStoppedState(btn as HTMLButtonElement)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Handles checking visibility conditions and restoring favicon when needed
+ */
+function checkVisibilityAndRestoreFavicon(): void {
+  if (faviconState.currentIcon === 'original') return; // Already using original favicon
+
+  // Only restore if both conditions are met:
+  // 1. Page is visible (not in background tab)
+  // 2. Send message button is visible
+  if (!document.hidden && isSendMessageButtonVisible()) {
+    restoreOriginalFavicon();
   }
 }
 
@@ -147,6 +281,11 @@ export function setupResponseStateObserver(): void {
 
     if (relevantChange) {
       debouncedEvaluate();
+
+      // Also check favicon visibility conditions when DOM changes
+      if (faviconState.isModified) {
+        checkVisibilityAndRestoreFavicon();
+      }
     }
   });
 
@@ -168,11 +307,74 @@ export function setupResponseStateObserver(): void {
     characterData: false, // Don't need character data changes
   });
 
+  // Set up an intersection observer for the send message button to detect when it's visible
+  const setupIntersectionObserver = () => {
+    const intersectionObserver = new IntersectionObserver(
+      entries => {
+        if (entries.some(entry => entry.isIntersecting)) {
+          // If any send button is visible, check visibility conditions
+          checkVisibilityAndRestoreFavicon();
+        }
+      },
+      {
+        threshold: 0.1, // Button is considered visible when at least 10% is in viewport
+      }
+    );
+
+    // Function to observe all send message buttons
+    const observeSendButtons = () => {
+      const sendButtons = document.querySelectorAll('button[aria-label="Send message"]');
+      sendButtons.forEach(button => {
+        if (button instanceof HTMLElement) {
+          intersectionObserver.observe(button);
+        }
+      });
+    };
+
+    // Observe existing buttons
+    observeSendButtons();
+
+    // Re-observe buttons when DOM changes (new buttons might appear)
+    const buttonObserver = new MutationObserver(mutations => {
+      const hasNewButtons = mutations.some(
+        mutation =>
+          mutation.type === 'childList' ||
+          (mutation.type === 'attributes' &&
+            mutation.attributeName === 'aria-label' &&
+            mutation.target instanceof HTMLElement &&
+            mutation.target.getAttribute('aria-label') === 'Send message')
+      );
+
+      if (hasNewButtons) {
+        observeSendButtons();
+      }
+    });
+
+    buttonObserver.observe(document.body, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ['aria-label'],
+    });
+  };
+
+  // Set up visibility change listener to restore favicon when page becomes visible
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) {
+      // Page became visible, check if we should restore favicon
+      checkVisibilityAndRestoreFavicon();
+    }
+  });
+
   // Perform the initial check once the document is ready
   if (document.readyState === 'complete' || document.readyState === 'interactive') {
     performInitialCheck();
+    setupIntersectionObserver();
   } else {
-    window.addEventListener('DOMContentLoaded', performInitialCheck); // Use DOMContentLoaded for faster check
+    window.addEventListener('DOMContentLoaded', () => {
+      performInitialCheck();
+      setupIntersectionObserver();
+    });
   }
 
   console.log('[CONTENT] Response state observer setup complete v2');
