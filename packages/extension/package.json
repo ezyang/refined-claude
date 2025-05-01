@@ -7,8 +7,8 @@
   "files": ["dist"],
   "scripts": {
     "prebuild": "mkdir -p dist && mkdir -p public/images",
-    "build": "cp -f src/icon*.png public/images/ && cp -f src/icon*.svg public/images/ 2>/dev/null || true && tsup && cp -f dist/icon*.png dist/images/ 2>/dev/null || true",
-    "dev": "cp -f src/icon*.png public/images/ && cp -f src/icon*.svg public/images/ 2>/dev/null || true && tsup --watch && cp -f dist/icon*.png dist/images/ 2>/dev/null || true",
+    "build": "tsup",
+    "dev": "tsup --watch",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit"
   },
