@@ -3,7 +3,11 @@
   "globalDependencies": ["**/.env"],
   "pipeline": {
     "build": { "dependsOn": ["^build"], "outputs": ["dist/**"] },
-    "test": { "dependsOn": ["^build"], "inputs": ["src/**/*.ts", "test/**/*.ts", "**/*.test.ts"] },
+    "test": {
+      "dependsOn": ["^build"],
+      "inputs": ["src/**/*.ts", "test/**/*.ts", "**/*.test.ts"],
+      "env": ["TURBO=true"]
+    },
     "lint": { "outputs": [] },
     "typecheck": { "outputs": [] },
     "dev": { "cache": false, "persistent": true },

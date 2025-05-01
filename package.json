@@ -7,7 +7,7 @@
     "dev": "turbo run dev --parallel",
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
-    "test": "turbo run test --parallel",
+    "test": "turbo run test --parallel --no-update-notifier --log-prefix=none",
     "build": "turbo run build",
     "clean": "turbo prune --force && rm -rf **/dist",
     "format": "prettier --write .",
