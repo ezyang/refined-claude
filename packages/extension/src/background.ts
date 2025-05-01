@@ -38,7 +38,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     console.log('Showing notification:', title, notificationMessage);
 
     const icon_url = chrome.runtime.getURL('images/icon128.png');
-    console.log('icon url:', icon_url)
+    console.log('icon url:', icon_url);
 
     chrome.notifications.create({
       type: 'basic',
