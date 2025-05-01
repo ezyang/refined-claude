@@ -6,9 +6,9 @@
   "types": "dist/index.d.ts",
   "files": ["dist"],
   "scripts": {
-    "prebuild": "mkdir -p dist",
-    "build": "tsup && cp src/manifest.json dist/",
-    "dev": "tsup --watch & cp src/manifest.json dist/",
+    "prebuild": "mkdir -p dist && mkdir -p public/images",
+    "build": "cp -f src/icon*.png public/images/ && cp -f src/icon*.svg public/images/ 2>/dev/null || true && tsup && cp -f dist/icon*.png dist/images/ 2>/dev/null || true",
+    "dev": "cp -f src/icon*.png public/images/ && cp -f src/icon*.svg public/images/ 2>/dev/null || true && tsup --watch && cp -f dist/icon*.png dist/images/ 2>/dev/null || true",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit"
   },

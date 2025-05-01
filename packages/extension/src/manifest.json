@@ -1,17 +1,18 @@
 {
-  "manifest_version": 3,
-  "name": "Sublime Claude Modal Auto-Clicker",
-  "version": "0.1.0",
-  "description": "Automatically clicks 'Allow for this chat' button in modal dialogs and notifies when responses are complete",
-  "permissions": ["scripting", "activeTab", "tabs", "notifications"],
-  "host_permissions": ["*://*.claude.ai/*", "*://localhost/*"],
   "background": { "service_worker": "background.mjs", "type": "module" },
   "content_scripts": [
     {
-      "matches": ["*://*.claude.ai/*", "*://localhost/*"],
+      "all_frames": true,
       "js": ["index.global.js"],
-      "run_at": "document_idle",
-      "all_frames": true
+      "matches": ["*://*.claude.ai/*", "*://localhost/*"],
+      "run_at": "document_idle"
     }
-  ]
+  ],
+  "description": "Automatically clicks 'Allow for this chat' button in modal dialogs and notifies when responses are complete",
+  "host_permissions": ["*://*.claude.ai/*", "*://localhost/*"],
+  "icons": { "16": "images/icon16.png", "48": "images/icon48.png", "128": "images/icon128.png" },
+  "manifest_version": 3,
+  "name": "Sublime Claude Modal Auto-Clicker",
+  "permissions": ["scripting", "activeTab", "tabs", "notifications"],
+  "version": "0.1.0"
 }
