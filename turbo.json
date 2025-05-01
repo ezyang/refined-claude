@@ -6,7 +6,8 @@
     "test": {
       "dependsOn": ["^build"],
       "inputs": ["src/**/*.ts", "test/**/*.ts", "**/*.test.ts"],
-      "env": ["TURBO=true"]
+      "env": ["TURBO=true"],
+      "cache": false
     },
     "lint": { "outputs": [] },
     "typecheck": { "outputs": [] },
