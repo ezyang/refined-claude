@@ -65,12 +65,16 @@ export function setupResponseStateObserver(): void {
     if (newState === null) return;
 
     // If this is the first time we're seeing this button, just record the state
-    if (observedButton !== button || currentButtonState === null) {
+    if (observedButton === null || currentButtonState === null) {
       observedButton = button;
       currentButtonState = newState;
       console.log(`[CONTENT] Tracking button in state: ${newState}`);
       return;
     }
+
+    // Always update the observed button to the latest one
+    // This ensures we track the same button even if DOM elements are recreated
+    observedButton = button;
 
     // Check if the state changed from RUNNING to STOPPED
     if (
@@ -86,6 +90,11 @@ export function setupResponseStateObserver(): void {
         title: 'Claude Response Complete',
         message: 'Your Claude response has finished generating.',
       });
+    }
+
+    // Log state changes for any transition (for debugging)
+    if (currentButtonState !== newState) {
+      console.log(`[CONTENT] Tracking button in state: ${newState}`);
     }
 
     // Update the current state
