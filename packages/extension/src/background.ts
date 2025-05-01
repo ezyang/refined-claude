@@ -5,6 +5,16 @@ console.log('Background script loaded');
 // Add listener for extension installation
 chrome.runtime.onInstalled.addListener(() => {
   console.log('Extension installed');
+
+  // Request permissions for notifications
+  chrome.permissions.contains({ permissions: ['notifications'] }, hasPermission => {
+    if (!hasPermission) {
+      console.log('Requesting notification permission');
+      chrome.permissions.request({ permissions: ['notifications'] }, granted => {
+        console.log('Notification permission granted:', granted);
+      });
+    }
+  });
 });
 
 // Listen for messages from content scripts
@@ -19,6 +29,25 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       sendResponse({ error: 'Tab ID not available' });
     }
     return true; // Keep the message channel open for the async response
+  }
+
+  if (message.action === 'showNotification') {
+    // Show notification using Chrome's notification API
+    const { title, message: notificationMessage } = message;
+
+    console.log('Showing notification:', title, notificationMessage);
+
+    chrome.notifications.create({
+      type: 'basic',
+      iconUrl: chrome.runtime.getURL('icon128.png'),
+      title: title || 'Claude Notification',
+      message: notificationMessage || 'Notification from Claude',
+      priority: 1,
+    });
+
+    // No response needed
+    sendResponse({ success: true });
+    return true;
   }
 
   if (message.action === 'injectScriptIntoFrame') {

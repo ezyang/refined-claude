@@ -1,6 +1,12 @@
 # Sublime Claude Extension
 
-This Chrome extension automatically clicks the 'Allow for this chat' button in modal dialogs.
+This Chrome extension automatically clicks the 'Allow for this chat' button in modal dialogs and provides notifications when Claude responses are complete.
+
+## Features
+
+1. **Auto-click 'Allow for this chat'** - Automatically clicks the modal dialog button
+2. **Response Completion Notification** - Shows a desktop notification when Claude finishes generating a response
+3. **Continue Button Auto-click** - Automatically clicks the Continue button when it appears
 
 ## Development
 

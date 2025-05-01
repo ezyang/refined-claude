@@ -3,6 +3,9 @@
 
 console.log('[CONTENT] Sublime Claude content script loaded! URL:', window.location.href);
 
+// Import response state observer
+import { setupResponseStateObserver } from './observers/responseStateObserver';
+
 // Class to check if we're running in rrweb replay environment
 const RRWEB_REPLAY_MARKER = 'rrweb-replay-environment';
 
@@ -372,6 +375,9 @@ function init(): void {
     // Set up Continue button observer
     setupContinueButtonObserver();
 
+    // Set up response state observer
+    setupResponseStateObserver();
+
     // Set pageFullyLoaded flag after the page has loaded
     if (document.readyState === 'complete') {
       state.pageFullyLoaded = true;
@@ -404,4 +410,5 @@ export {
   checkIfRrwebReplay,
   isIframeInsideRrwebReplay,
   injectContentScriptIntoIframe,
+  setupResponseStateObserver,
 };

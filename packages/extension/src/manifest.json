@@ -2,8 +2,8 @@
   "manifest_version": 3,
   "name": "Sublime Claude Modal Auto-Clicker",
   "version": "0.1.0",
-  "description": "Automatically clicks 'Allow for this chat' button in modal dialogs",
-  "permissions": ["scripting", "activeTab", "tabs"],
+  "description": "Automatically clicks 'Allow for this chat' button in modal dialogs and notifies when responses are complete",
+  "permissions": ["scripting", "activeTab", "tabs", "notifications"],
   "host_permissions": ["*://*.claude.ai/*", "*://localhost/*"],
   "background": { "service_worker": "background.mjs", "type": "module" },
   "content_scripts": [

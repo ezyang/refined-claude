@@ -215,4 +215,28 @@ describe('rrweb-headless e2e', () => {
     },
     isDebugMode ? 24 * 60 * 60 * 1000 : 60_000
   );
+
+  // Test for the simple-response.json file (Response state toggle)
+  it(
+    'should detect response button state change in simple-response.json',
+    async () => {
+      await runReplayTest('simple-response.json', result => {
+        // Check for the response state observer initialization
+        expect(
+          result.logs.some(log => log.includes('Response state observer setup complete'))
+        ).toBe(true);
+
+        // Check for state tracking
+        expect(result.logs.some(log => log.includes('Tracking button in state:'))).toBe(true);
+
+        // Check for state change detection
+        expect(
+          result.logs.some(log => log.includes('Response state changed: RUNNING → STOPPED'))
+        ).toBe(true);
+
+        console.log('✅ Response state observer test passed!');
+      });
+    },
+    isDebugMode ? 24 * 60 * 60 * 1000 : 60_000
+  );
 });
