@@ -9,11 +9,13 @@ const RRWEB_REPLAY_MARKER = 'rrweb-replay-environment';
 // Extension state
 interface ExtensionState {
   isRrwebReplay: boolean;
+  pageFullyLoaded: boolean;
 }
 
 // Initialize state
 const state: ExtensionState = {
   isRrwebReplay: false,
+  pageFullyLoaded: false,
 };
 
 /**
@@ -67,6 +69,34 @@ function findAndClickAllowButton(): void {
 }
 
 /**
+ * Find and click the "Continue" button when it appears after page load
+ */
+function findAndClickContinueButton(): void {
+  // Look for the button with the specific class attributes as described
+  const continueButton = document.querySelector(
+    'button.inline-flex.items-center.justify-center.relative.shrink-0.can-focus.select-none[aria-label="Continue"]'
+  );
+
+  if (!continueButton) return;
+
+  // Log for debugging
+  console.log('[CONTENT] Found Continue button:', continueButton);
+
+  // Only click if we're not in rrweb replay mode
+  if (!state.isRrwebReplay) {
+    // We don't want to click if this button was present during initial page load
+    if (state.pageFullyLoaded) {
+      console.log('[CONTENT] Clicking "Continue" button');
+      (continueButton as HTMLButtonElement).click();
+    } else {
+      console.log('[CONTENT] Continue button found during page load, not clicking');
+    }
+  } else {
+    console.log('[CONTENT] Skipped Continue button click due to rrweb replay');
+  }
+}
+
+/**
  * Set up MutationObserver to watch for modal elements
  */
 function setupModalObserver(): void {
@@ -111,6 +141,62 @@ function setupModalObserver(): void {
   });
 
   console.log('[CONTENT] Modal observer set up');
+}
+
+/**
+ * Set up MutationObserver to watch for "Continue" button
+ */
+function setupContinueButtonObserver(): void {
+  // Create a MutationObserver to watch for changes in the DOM
+  const observer = new MutationObserver(mutations => {
+    // Check if any nodes were added or attributes were changed
+    const buttonsAdded = mutations.some(mutation => {
+      // Check for button elements in added nodes
+      if (mutation.addedNodes.length > 0) {
+        for (const node of Array.from(mutation.addedNodes)) {
+          if (node instanceof HTMLElement) {
+            // Check if this node is the button we're looking for
+            if (node.tagName === 'BUTTON' && node.getAttribute('aria-label') === 'Continue') {
+              return true;
+            }
+
+            // Or if it contains the button we're looking for
+            const button = node.querySelector('button[aria-label="Continue"]');
+            if (button) {
+              return true;
+            }
+          }
+        }
+      }
+
+      // Check if attributes changed on a button element
+      if (
+        mutation.type === 'attributes' &&
+        mutation.target instanceof HTMLElement &&
+        mutation.target.tagName === 'BUTTON'
+      ) {
+        if (mutation.target.getAttribute('aria-label') === 'Continue') {
+          return true;
+        }
+      }
+
+      return false;
+    });
+
+    if (buttonsAdded) {
+      findAndClickContinueButton();
+    }
+  });
+
+  // Configure the observer to watch for additions of nodes and changes to attributes
+  observer.observe(document.body, {
+    childList: true,
+    subtree: true,
+    attributes: true,
+    attributeFilter: ['aria-label', 'class'],
+  });
+
+  console.log('[CONTENT] Continue button observer set up');
 }
 
 /**
@@ -282,6 +368,23 @@ function init(): void {
   if (!state.isRrwebReplay || isIframeInReplay) {
     // Set up observer for future changes
     setupModalObserver();
+
+    // Set up Continue button observer
+    setupContinueButtonObserver();
+
+    // Set pageFullyLoaded flag after the page has loaded
+    if (document.readyState === 'complete') {
+      state.pageFullyLoaded = true;
+      console.log('[CONTENT] Page is already fully loaded');
+    } else {
+      window.addEventListener('load', () => {
+        state.pageFullyLoaded = true;
+        console.log('[CONTENT] Page fully loaded event fired');
+
+        // Check once for the Continue button after page load
+        findAndClickContinueButton();
+      });
+    }
   } else {
     console.log('[CONTENT] Skipping modal observer setup in top-level rrweb replay environment');
 
@@ -296,6 +399,8 @@ init();
 // Export for testing
 export {
   findAndClickAllowButton,
+  findAndClickContinueButton,
+  setupContinueButtonObserver,
   checkIfRrwebReplay,
   isIframeInsideRrwebReplay,
   injectContentScriptIntoIframe,
