@@ -171,9 +171,8 @@ function evaluateCurrentResponseState() {
       `[CONTENT] Response state changed: ${currentOverallState ?? 'UNKNOWN'} → ${detectedState ?? 'UNKNOWN'}`
     );
 
-    // Handle STOPPED -> RUNNING transition
+    // Handle RUNNING state
     if (
-      currentOverallState === ResponseButtonState.STOPPED &&
       detectedState === ResponseButtonState.RUNNING
     ) {
       console.log('[CONTENT] Claude is generating a response.');
