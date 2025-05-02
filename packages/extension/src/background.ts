@@ -6,6 +6,27 @@ console.log('Background script loaded');
 chrome.runtime.onInstalled.addListener(() => {
   console.log('Extension installed');
 
+  // Initialize default settings
+  chrome.storage.sync.get({ autoContinueEnabled: true }, result => {
+    if (chrome.runtime.lastError) {
+      console.error('Error loading settings:', chrome.runtime.lastError);
+      return;
+    }
+
+    // If the setting doesn't exist yet, initialize it
+    if (result.autoContinueEnabled === undefined) {
+      chrome.storage.sync.set({ autoContinueEnabled: true }, () => {
+        if (chrome.runtime.lastError) {
+          console.error('Error saving default settings:', chrome.runtime.lastError);
+          return;
+        }
+        console.log('Default settings initialized:', { autoContinueEnabled: true });
+      });
+    } else {
+      console.log('Existing settings found:', result);
+    }
+  });
+
   // Request permissions for notifications
   chrome.permissions.contains({ permissions: ['notifications'] }, hasPermission => {
     if (!hasPermission) {

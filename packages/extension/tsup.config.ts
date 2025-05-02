@@ -30,6 +30,18 @@ export default defineConfig([
         path.resolve(__dirname, 'src/manifest.json'),
         path.resolve(__dirname, 'dist/manifest.json')
       );
+
+      // Copy popup.html to dist
+      copyFileSync(
+        path.resolve(__dirname, 'src/popup.html'),
+        path.resolve(__dirname, 'dist/popup.html')
+      );
+
+      // Copy popup.js to dist
+      copyFileSync(
+        path.resolve(__dirname, 'src/popup.js'),
+        path.resolve(__dirname, 'dist/popup.js')
+      );
     },
   },
 

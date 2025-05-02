@@ -1,0 +1,117 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <title>Sublime Claude Settings</title>
+    <style>
+      body {
+        width: 200px;
+        padding: 16px;
+        font-family:
+          system-ui,
+          -apple-system,
+          BlinkMacSystemFont,
+          'Segoe UI',
+          Roboto,
+          Oxygen,
+          Ubuntu,
+          Cantarell,
+          sans-serif;
+        margin: 0;
+        color: #333;
+      }
+
+      h2 {
+        font-size: 16px;
+        margin-top: 0;
+        margin-bottom: 16px;
+        padding-bottom: 8px;
+        border-bottom: 1px solid #eee;
+      }
+
+      .setting-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 8px;
+      }
+
+      label {
+        font-size: 14px;
+      }
+
+      .toggle-switch {
+        position: relative;
+        display: inline-block;
+        width: 40px;
+        height: 20px;
+      }
+
+      .toggle-switch input {
+        opacity: 0;
+        width: 0;
+        height: 0;
+      }
+
+      .slider {
+        position: absolute;
+        cursor: pointer;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background-color: #ccc;
+        transition: 0.4s;
+        border-radius: 20px;
+      }
+
+      .slider:before {
+        position: absolute;
+        content: '';
+        height: 16px;
+        width: 16px;
+        left: 2px;
+        bottom: 2px;
+        background-color: white;
+        transition: 0.4s;
+        border-radius: 50%;
+      }
+
+      input:checked + .slider {
+        background-color: #6246ea;
+      }
+
+      input:focus + .slider {
+        box-shadow: 0 0 1px #6246ea;
+      }
+
+      input:checked + .slider:before {
+        transform: translateX(20px);
+      }
+
+      .footer {
+        font-size: 11px;
+        color: #888;
+        text-align: center;
+        margin-top: 16px;
+        border-top: 1px solid #eee;
+        padding-top: 8px;
+      }
+    </style>
+  </head>
+  <body>
+    <h2>Sublime Claude Settings</h2>
+
+    <div class="setting-row">
+      <label for="autoContinueToggle">Auto Continue</label>
+      <label class="toggle-switch">
+        <input type="checkbox" id="autoContinueToggle" />
+        <span class="slider"></span>
+      </label>
+    </div>
+
+    <div class="footer">Sublime Claude v0.1.0</div>
+
+    <script src="popup.js"></script>
+  </body>
+</html>

@@ -1,5 +1,6 @@
 {
   "background": { "service_worker": "background.mjs", "type": "module" },
+  "action": { "default_popup": "popup.html", "default_icon": { "128": "images/icon128.png" } },
   "content_scripts": [
     {
       "all_frames": true,
@@ -13,10 +14,9 @@
   "icons": { "128": "images/icon128.png" },
   "manifest_version": 3,
   "name": "Sublime Claude Modal Auto-Clicker",
-  "permissions": ["scripting", "activeTab", "tabs", "notifications"],
+  "permissions": ["scripting", "activeTab", "tabs", "notifications", "storage"],
   "version": "0.1.0",
-  "web_accessible_resources": [{
-    "resources": ["images/*.ico"],
-    "matches": ["*://*.claude.ai/*", "*://localhost/*"]
-  }]
+  "web_accessible_resources": [
+    { "resources": ["images/*.ico"], "matches": ["*://*.claude.ai/*", "*://localhost/*"] }
+  ]
 }

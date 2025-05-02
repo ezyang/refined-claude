@@ -13,12 +13,14 @@ const RRWEB_REPLAY_MARKER = 'rrweb-replay-environment';
 interface ExtensionState {
   isRrwebReplay: boolean;
   pageFullyLoaded: boolean;
+  autoContinueEnabled: boolean;
 }
 
 // Initialize state
 const state: ExtensionState = {
   isRrwebReplay: false,
   pageFullyLoaded: false,
+  autoContinueEnabled: true, // Default value, will be updated from storage
 };
 
 /**
@@ -85,8 +87,8 @@ function findAndClickContinueButton(): void {
   // Log for debugging
   console.log('[CONTENT] Found Continue button:', continueButton);
 
-  // Only click if we're not in rrweb replay mode
-  if (!state.isRrwebReplay) {
+  // Only click if we're not in rrweb replay mode and Auto Continue is enabled
+  if (!state.isRrwebReplay && state.autoContinueEnabled) {
     // We don't want to click if this button was present during initial page load
     if (state.pageFullyLoaded) {
       console.log('[CONTENT] Clicking "Continue" button');
@@ -94,6 +96,8 @@ function findAndClickContinueButton(): void {
     } else {
       console.log('[CONTENT] Continue button found during page load, not clicking');
     }
+  } else if (!state.autoContinueEnabled) {
+    console.log('[CONTENT] Auto Continue is disabled, not clicking Continue button');
   } else {
     console.log('[CONTENT] Skipped Continue button click due to rrweb replay');
   }
@@ -351,10 +355,41 @@ function isIframeInsideRrwebReplay(): boolean {
 }
 
 /**
+ * Load extension settings from chrome.storage.sync
+ */
+async function loadSettings(): Promise<void> {
+  try {
+    // Get the current settings from chrome.storage.sync
+    const result = await new Promise<{ autoContinueEnabled: boolean }>(resolve => {
+      chrome.storage.sync.get({ autoContinueEnabled: true }, items => {
+        if (chrome.runtime.lastError) {
+          console.error('[CONTENT] Error loading settings:', chrome.runtime.lastError);
+          // Use default values if there's an error
+          resolve({ autoContinueEnabled: true });
+          return;
+        }
+        resolve(items as { autoContinueEnabled: boolean });
+      });
+    });
+
+    // Update the state with the loaded settings
+    state.autoContinueEnabled = result.autoContinueEnabled;
+    console.log('[CONTENT] Settings loaded:', result);
+  } catch (error) {
+    console.error('[CONTENT] Error in loadSettings:', error);
+    // If there's an error, use default values
+    state.autoContinueEnabled = true;
+  }
+}
+
+/**
  * Initialize the extension
  */
-function init(): void {
+async function init(): Promise<void> {
   console.log('[CONTENT] Sublime Claude Modal Auto-Clicker extension initialized');
+
+  // Load settings first
+  await loadSettings();
 
   // Check if we're in an rrweb replay environment
   state.isRrwebReplay = checkIfRrwebReplay();
@@ -364,6 +399,17 @@ function init(): void {
   // not in the top level rrweb replay environment itself
   const isIframeInReplay = isIframeInsideRrwebReplay();
   console.log('[CONTENT] Is iframe inside rrweb replay:', isIframeInReplay);
+
+  // Set up message listener for settings updates
+  chrome.runtime.onMessage.addListener((message, _sender, _sendResponse) => {
+    if (message.action === 'updateSettings' && message.settings) {
+      console.log('[CONTENT] Received settings update:', message.settings);
+      // Update the state with new settings
+      if (message.settings.autoContinueEnabled !== undefined) {
+        state.autoContinueEnabled = message.settings.autoContinueEnabled;
+      }
+    }
+  });
 
   // Only continue if:
   // 1. This is NOT a top-level rrweb replay environment, OR
@@ -411,4 +457,5 @@ export {
   isIframeInsideRrwebReplay,
   injectContentScriptIntoIframe,
   setupResponseStateObserver,
+  loadSettings,
 };
