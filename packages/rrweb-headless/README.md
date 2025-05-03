@@ -16,7 +16,7 @@ A tool for running [rrweb](https://github.com/rrweb-io/rrweb) replays in headles
 ### As a library
 
 ```typescript
-import { runRrwebReplay, loadEventsFromFile } from '@sublime-claude/rrweb-headless';
+import { runRrwebReplay, loadEventsFromFile } from '@refined-claude/rrweb-headless';
 
 // Load events from file
 const events = await loadEventsFromFile('path/to/events.json');
@@ -51,7 +51,7 @@ The package provides a CLI tool for debugging rrweb recordings:
 
 ```bash
 # Install the package
-npm install @sublime-claude/rrweb-headless
+npm install @refined-claude/rrweb-headless
 
 # Run with default settings (headful mode, no timeout)
 npx test-rrweb path/to/events.json
@@ -158,7 +158,7 @@ Using the explicit channel provides:
 ## Installation
 
 ```bash
-npm install @sublime-claude/rrweb-headless
+npm install @refined-claude/rrweb-headless
 ```
 
 ## Package Scripts

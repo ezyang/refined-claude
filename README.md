@@ -1,4 +1,4 @@
-# sublime-claude
+# refined-claude
 
 A TypeScript monorepo following strict TypeScript and ESLint configuration.
 

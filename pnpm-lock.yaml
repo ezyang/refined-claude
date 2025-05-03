@@ -45,7 +45,7 @@ importers:
 
   packages/rrweb-headless:
     dependencies:
-      '@sublime-claude/extension':
+      '@refined-claude/extension':
         specifier: 0.1.0
         version: link:../extension
       playwright:
