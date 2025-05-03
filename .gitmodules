@@ -1,3 +1,0 @@
-[submodule "vendor/rrweb"]
-	path = vendor/rrweb
-	url = git@github.com:rrweb-io/rrweb.git

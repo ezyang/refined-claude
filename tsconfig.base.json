@@ -24,9 +24,6 @@
     "allowSyntheticDefaultImports": true,
 
     /* Paths shared across workspace */
-    "baseUrl": ".",
-    "paths": {
-      "@utils/*": ["packages/utils/src/*"]
-    }
+    "baseUrl": "."
   }
 }
