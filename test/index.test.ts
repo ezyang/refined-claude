@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { runRrwebReplay, loadEventsFromFile } from './index';
+import { runRrwebReplay, loadEventsFromFile } from '@refined-claude/rrweb-headless';
 import path from 'path';
 import fs from 'fs/promises';
 
@@ -13,7 +13,7 @@ async function runReplayTest(
   testFile: string,
   validateResults: (result: any) => void
 ): Promise<void> {
-  const testDataPath = path.resolve(__dirname, '../../..', `testdata/${testFile}`);
+  const testDataPath = path.resolve(__dirname, '..', `testdata/${testFile}`);
 
   // Use loadEventsFromFile to properly load events
   const testEvents = await loadEventsFromFile(testDataPath);
@@ -26,7 +26,7 @@ async function runReplayTest(
   console.log('🔄 TEST MILESTONE: Setup started');
 
   // Path to our extension
-  const extensionPath = path.resolve(__dirname, '../../extension/dist');
+  const extensionPath = path.resolve(__dirname, '../dist');
 
   // Verify extension files exist
   try {

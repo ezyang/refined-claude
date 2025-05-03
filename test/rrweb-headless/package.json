@@ -2,9 +2,11 @@
   "name": "@refined-claude/rrweb-headless",
   "version": "0.1.0",
   "type": "module",
+  "private": true,
   "main": "dist/index.js",
   "module": "dist/index.mjs",
   "types": "dist/index.d.ts",
+  "exports": { ".": "./dist/index.js" },
   "bin": {
     "test-rrweb": "dist/cli.js"
   },
@@ -13,16 +15,9 @@
     "build": "tsup --config tsup.config.ts",
     "dev": "tsup --config tsup.config.ts --watch",
     "lint": "eslint .",
-    "typecheck": "tsc --noEmit",
-    "test": "vitest run",
-    "test:verbose": "vitest run --reporter verbose",
-    "test:e2e": "vitest run --config vitest.e2e.config.ts",
-    "test-replay": "tsx src/cli.ts",
-    "test-replay:debug": "tsx src/cli.ts --headful --timeout 0",
-    "test-replay:devtools": "SUBLIME_DEBUG=1 tsx src/cli.ts"
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@refined-claude/extension": "0.1.0",
     "playwright": "^1.41.0",
     "rrweb": "^2.0.0-alpha.4",
     "rrweb-player": "^1.0.0-alpha.4"
