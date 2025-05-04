@@ -64,3 +64,4 @@ fixtures
 
 dist.crx
 dist.pem
+*.zip
