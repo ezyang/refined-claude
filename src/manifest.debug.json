@@ -1,7 +1,4 @@
 {
-  "//": "THIS FILE IS NO LONGER USED DIRECTLY",
-  "//comment": "See manifest.debug.json and manifest.release.json files instead.",
-  "//note": "The build process will use the appropriate manifest based on the BUILD_MODE env variable.",
   "background": { "service_worker": "background.mjs", "type": "module" },
   "action": { "default_popup": "popup.html", "default_icon": { "128": "images/icon128.png" } },
   "content_scripts": [
@@ -12,12 +9,12 @@
       "run_at": "document_idle"
     }
   ],
-  "description": "Enhancements for claude.ai website.  Best used with claude-mcp extension as well.",
+  "description": "Enhancements for claude.ai website (DEBUG).  Best used with claude-mcp extension as well.",
   "host_permissions": ["*://*.claude.ai/*", "*://localhost/*"],
   "icons": { "128": "images/icon128.png" },
   "manifest_version": 3,
-  "name": "Refined Claude",
-  "permissions": ["tabs", "notifications", "storage"],
+  "name": "Refined Claude (DEBUG)",
+  "permissions": ["scripting", "activeTab", "tabs", "notifications", "storage"],
   "version": "0.1.0",
   "web_accessible_resources": [
     { "resources": ["images/*.ico"], "matches": ["*://*.claude.ai/*", "*://localhost/*"] }

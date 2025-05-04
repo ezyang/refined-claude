@@ -1,7 +1,4 @@
 {
-  "//": "THIS FILE IS NO LONGER USED DIRECTLY",
-  "//comment": "See manifest.debug.json and manifest.release.json files instead.",
-  "//note": "The build process will use the appropriate manifest based on the BUILD_MODE env variable.",
   "background": { "service_worker": "background.mjs", "type": "module" },
   "action": { "default_popup": "popup.html", "default_icon": { "128": "images/icon128.png" } },
   "content_scripts": [

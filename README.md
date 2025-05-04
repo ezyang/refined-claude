@@ -2,7 +2,7 @@
 
 This Chrome extension adds the following enhancements to claude.ai:
 
-1. Triggers a notification when Claude has finished responding.  Also, the
+1. Triggers a notification when Claude has finished responding. Also, the
    favicon changes grey while generation is happening, and then has a red dot
    when it is done, indicating you should check the window.
 2. Auto-click "Continue" when it occurs (can be disabled)
@@ -24,10 +24,25 @@ This Chrome extension adds the following enhancements to claude.ai:
 
 ### Development Workflow
 
+The extension has two build modes:
+
+- **Debug Mode**: Includes additional permissions (`scripting`, `activeTab`) for development and testing
+- **Release Mode**: Excludes these permissions for Chrome Web Store releases
+
 To build the extension:
+
+#### For Development (Debug Mode)
+
+```bash
+pnpm build:debug
+```
+
+#### For Release
 
 ```bash
 pnpm build
+# or
+pnpm build:release
 ```
 
 Then load the `dist` directory as an unpacked extension in Chrome.
