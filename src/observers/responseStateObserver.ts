@@ -172,9 +172,7 @@ function evaluateCurrentResponseState() {
     );
 
     // Handle RUNNING state
-    if (
-      detectedState === ResponseButtonState.RUNNING
-    ) {
+    if (detectedState === ResponseButtonState.RUNNING) {
       console.log('[CONTENT] Claude is generating a response.');
 
       // Change favicon to Claude busy icon when response starts
