@@ -12,6 +12,7 @@
     "test:ci": "pnpm run --filter rrweb-headless build && pnpm build && vitest run",
     "test": "vitest run",
     "lint": "eslint .",
+    "format": "prettier --write .",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
