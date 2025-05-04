@@ -1,70 +1,33 @@
-# Sublime Claude Extension
+# Refined Claude Extension
 
-This Chrome extension automatically clicks the 'Allow for this chat' button in modal dialogs and provides notifications when Claude responses are complete.
+This Chrome extension adds the following enhancements to claude.ai:
 
-## Features
+1. Triggers a notification when Claude has finished responding.  Also, the
+   favicon changes grey while generation is happening, and then has a red dot
+   when it is done, indicating you should check the window.
+2. Auto-click "Continue" when it occurs (can be disabled)
 
-1. **Auto-click 'Allow for this chat'** - Automatically clicks the modal dialog button
-2. **Response Completion Notification** - Shows a desktop notification when Claude finishes generating a response
-3. **Continue Button Auto-click** - Automatically clicks the Continue button when it appears
+## Known bugs
 
-## Development
+- Auto-click for "Continue" occurs even if you merely navigate onto a page
+  that has a Continue on it.
 
-This is a Chrome Manifest V3 extension that uses:
+- We will indefinitely click "Continue" if you hit the message limit and are
+  simultaneously rate limited.
 
-- TypeScript for type safety
-- tsup for bundling
+- When you start a fresh chat from the main screen, we don't seem to properly
+  change the favicon to indicate we are generating.
 
-### Build Instructions
+- There is some code for auto-approve tool use but it's broken right now, and
+  difficult for me to test as Anthropic as (temporarily?) opted into some flow
+  where tool approvals persist across chats.
 
-The extension uses different bundling formats for its components:
-
-1. **Background Service Worker** - Uses ES modules format as required by MV3
-2. **Content Script** - Uses IIFE (Immediately Invoked Function Expression) format
+### Development Workflow
 
 To build the extension:
 
 ```bash
-# From the project root
 pnpm build
-
-# Or from the extension directory
-cd packages/extension
-pnpm build
-```
-
-### Important Notes about MV3 and Bundling
-
-Chrome Manifest V3 has specific requirements for JavaScript bundles:
-
-- **Service Workers** must use ES modules format with `"type": "module"` in the manifest
-- **Content Scripts** must use plain scripts (IIFE) with no imports/exports
-
-The build configuration in `tsup.config.ts` handles this correctly with separate build configurations for each file type:
-
-```typescript
-// Background script (service worker) for MV3 - ES Module format
-{
-  entry: ['src/background.ts'],
-  format: ['esm'],
-  // ...
-}
-
-// Content script for MV3 - IIFE format (no modules)
-{
-  entry: ['src/index.ts'],
-  format: ['iife'],
-  globalName: 'SCContentScript',
-  // ...
-}
-```
-
-### Development Workflow
-
-For local development with auto-reloading:
-
-```bash
-pnpm dev
 ```
 
 Then load the `dist` directory as an unpacked extension in Chrome.
@@ -76,3 +39,6 @@ Run tests with:
 ```bash
 pnpm test
 ```
+
+The tests replay rrweb recordings of claude.ai with the extension loaded and verify that
+the extension triggers appropriately, so they take a bit of time to run.

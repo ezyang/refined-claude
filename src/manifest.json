@@ -9,11 +9,11 @@
       "run_at": "document_idle"
     }
   ],
-  "description": "Automatically clicks 'Allow for this chat' button in modal dialogs and notifies when responses are complete",
+  "description": "Enhancements for claude.ai website.  Best used with claude-mcp extension as well.",
   "host_permissions": ["*://*.claude.ai/*", "*://localhost/*"],
   "icons": { "128": "images/icon128.png" },
   "manifest_version": 3,
-  "name": "Sublime Claude Modal Auto-Clicker",
+  "name": "Refined Claude",
   "permissions": ["scripting", "activeTab", "tabs", "notifications", "storage"],
   "version": "0.1.0",
   "web_accessible_resources": [
