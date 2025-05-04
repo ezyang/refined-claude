@@ -61,3 +61,6 @@ fixtures
 # Playwright profiles
 .playwright-data*
 .tmp-playwright
+
+dist.crx
+dist.pem
