@@ -3,7 +3,7 @@
 /**
  * The states the response button can be in
  */
-enum ResponseButtonState {
+export enum ResponseButtonState {
   RUNNING = 'RUNNING',
   STOPPED = 'STOPPED',
 }
@@ -133,7 +133,11 @@ function isButtonInStoppedState(button: HTMLButtonElement): boolean {
 }
 
 // Global state for the *overall* response state detected in the DOM
-let currentOverallState: ResponseButtonState | null = null;
+// Now exported so it can be accessed from other modules
+export let currentOverallState: ResponseButtonState | null = null;
+
+// Flag to track if we've just had a RUNNING -> STOPPED transition
+export let hadRunningToStoppedTransition = false;
 
 /**
  * Queries the DOM to determine the current response state based on available buttons.
@@ -141,6 +145,9 @@ let currentOverallState: ResponseButtonState | null = null;
  */
 function evaluateCurrentResponseState() {
   let detectedState: ResponseButtonState | null = null;
+
+  // Reset the transition flag at the beginning of each evaluation
+  hadRunningToStoppedTransition = false;
 
   // Prioritize checking for the RUNNING state
   // QuerySelectorAll might be safer if multiple could exist transiently
@@ -185,6 +192,9 @@ function evaluateCurrentResponseState() {
       detectedState === ResponseButtonState.STOPPED
     ) {
       console.log('[CONTENT] Sending Response Complete notification.');
+
+      // Set the flag that we've just had a RUNNING -> STOPPED transition
+      hadRunningToStoppedTransition = true;
 
       // Change favicon to Claude ping icon when response completes
       setClaudePingFavicon();
@@ -236,6 +246,22 @@ function checkVisibilityAndRestoreFavicon(): void {
 /**
  * Setup an observer to detect when the response button toggles between RUNNING and STOPPED
  */
+/**
+ * Checks if a RUNNING -> STOPPED transition has just occurred
+ * This function should be used when deciding whether to auto-continue
+ */
+export function hasRunningToStoppedTransition(): boolean {
+  return hadRunningToStoppedTransition;
+}
+
+/**
+ * Reset the transition flag after it's been used
+ * This should be called after acting on a transition to prevent duplicate actions
+ */
+export function resetTransitionFlag(): void {
+  hadRunningToStoppedTransition = false;
+}
+
 export function setupResponseStateObserver(): void {
   console.log('[CONTENT] Setting up response state observer v2');
 

@@ -3,8 +3,12 @@
 
 console.log('[CONTENT] Sublime Claude content script loaded! URL:', window.location.href);
 
-// Import response state observer
-import { setupResponseStateObserver } from './observers/responseStateObserver';
+// Import response state observer and related functions
+import {
+  setupResponseStateObserver,
+  hasRunningToStoppedTransition,
+  resetTransitionFlag,
+} from './observers/responseStateObserver';
 
 // Class to check if we're running in rrweb replay environment
 const RRWEB_REPLAY_MARKER = 'rrweb-replay-environment';
@@ -74,7 +78,7 @@ function findAndClickAllowButton(): void {
 }
 
 /**
- * Find and click the "Continue" button when it appears after page load
+ * Find and click the "Continue" button when it appears after a RUNNING -> STOPPED transition
  */
 function findAndClickContinueButton(): void {
   // Look for the button with the specific class attributes as described
@@ -89,12 +93,18 @@ function findAndClickContinueButton(): void {
 
   // Only click if we're not in rrweb replay mode and Auto Continue is enabled
   if (!state.isRrwebReplay && state.autoContinueEnabled) {
-    // We don't want to click if this button was present during initial page load
-    if (state.pageFullyLoaded) {
-      console.log('[CONTENT] Clicking "Continue" button');
+    // Check if we're fully loaded and have a RUNNING -> STOPPED transition
+    if (state.pageFullyLoaded && hasRunningToStoppedTransition()) {
+      console.log('[CONTENT] Clicking "Continue" button after RUNNING -> STOPPED transition');
       (continueButton as HTMLButtonElement).click();
-    } else {
+      // Reset the transition flag to prevent clicking again on the same transition
+      resetTransitionFlag();
+    } else if (!state.pageFullyLoaded) {
       console.log('[CONTENT] Continue button found during page load, not clicking');
+    } else {
+      console.log(
+        '[CONTENT] Continue button found but no RUNNING -> STOPPED transition detected, not clicking'
+      );
     }
   } else if (!state.autoContinueEnabled) {
     console.log('[CONTENT] Auto Continue is disabled, not clicking Continue button');
@@ -191,6 +201,8 @@ function setupContinueButtonObserver(): void {
     });
 
     if (buttonsAdded) {
+      // The Continue button appeared, check if we should click it
+      // This will now only happen if we've had a RUNNING -> STOPPED transition
       findAndClickContinueButton();
     }
   });
@@ -433,8 +445,8 @@ async function init(): Promise<void> {
         state.pageFullyLoaded = true;
         console.log('[CONTENT] Page fully loaded event fired');
 
-        // Check once for the Continue button after page load
-        findAndClickContinueButton();
+        // We no longer need to check for the Continue button on page load
+        // since we only want to click it after a RUNNING -> STOPPED transition
       });
     }
   } else {
@@ -458,4 +470,6 @@ export {
   injectContentScriptIntoIframe,
   setupResponseStateObserver,
   loadSettings,
+  hasRunningToStoppedTransition,
+  resetTransitionFlag,
 };
