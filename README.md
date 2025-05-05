@@ -13,7 +13,7 @@ This Chrome extension adds the following enhancements to claude.ai:
   simultaneously rate limited.
 
 - When you start a fresh chat from the main screen, we don't seem to properly
-  change the favicon to indicate we are generating.  (This only happens intermittently.)
+  change the favicon to indicate we are generating. (This only happens intermittently.)
 
 - There is some code for auto-approve tool use but it's broken right now, and
   difficult for me to test as Anthropic as (temporarily?) opted into some flow

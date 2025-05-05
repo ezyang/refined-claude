@@ -16,12 +16,5 @@ export default defineConfig({
     globalSetup: './src/e2e.setup.ts',
     // Use basic reporter when running in CI or Turbo to avoid control character issues
     reporters: isCIorTurbo ? ['basic'] : ['verbose'],
-    // Don't run tests in parallel to avoid browser conflicts
-    pool: 'forks',
-    poolOptions: {
-      forks: {
-        singleFork: true,
-      },
-    },
   },
 });
