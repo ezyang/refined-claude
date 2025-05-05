@@ -9,14 +9,11 @@ This Chrome extension adds the following enhancements to claude.ai:
 
 ## Known bugs
 
-- Auto-click for "Continue" occurs even if you merely navigate onto a page
-  that has a Continue on it.
-
 - We will indefinitely click "Continue" if you hit the message limit and are
   simultaneously rate limited.
 
 - When you start a fresh chat from the main screen, we don't seem to properly
-  change the favicon to indicate we are generating.
+  change the favicon to indicate we are generating.  (This only happens intermittently.)
 
 - There is some code for auto-approve tool use but it's broken right now, and
   difficult for me to test as Anthropic as (temporarily?) opted into some flow
