@@ -11,7 +11,8 @@ const isDebugMode = process.env.SUBLIME_DEBUG === '1';
  */
 async function runReplayTest(
   testFile: string,
-  validateResults: (result: any) => void
+  validateResults: (result: any) => void,
+  speed?: number
 ): Promise<void> {
   const testDataPath = path.resolve(__dirname, '..', `testdata/${testFile}`);
 
@@ -72,7 +73,7 @@ async function runReplayTest(
 
   const result = await runRrwebReplay({
     events: testEvents,
-    playbackSpeed: 4,
+    playbackSpeed: speed ?? 8192, // Use provided speed or default to 8192
     // In debug mode, set timeout to 0 (browser stays open), otherwise use a timeout that's shorter than the test timeout
     timeout: testTimeout,
     // Use persistent profile
@@ -187,7 +188,7 @@ async function runReplayTest(
 }
 
 // This is an actual end-to-end test that launches a real browser
-describe('rrweb-headless e2e', () => {
+describe.concurrent('rrweb-headless e2e', () => {
   // Test for the approve-tool.json file (Allow button click)
   it(
     'should detect and click the Allow button in approve-tool.json',
@@ -220,22 +221,26 @@ describe('rrweb-headless e2e', () => {
   it(
     'should detect response button state change in simple-response.json',
     async () => {
-      await runReplayTest('simple-response.json', result => {
-        // Check for the response state observer initialization
-        expect(
-          result.logs.some(log => log.includes('Response state observer setup complete'))
-        ).toBe(true);
+      await runReplayTest(
+        'simple-response.json',
+        result => {
+          // Check for the response state observer initialization
+          expect(
+            result.logs.some(log => log.includes('Response state observer setup complete'))
+          ).toBe(true);
 
-        // Check for state tracking (using the new log format)
-        expect(result.logs.some(log => log.includes('Response state changed:'))).toBe(true);
+          // Check for state tracking (using the new log format)
+          expect(result.logs.some(log => log.includes('Response state changed:'))).toBe(true);
 
-        // Check for state change detection
-        expect(
-          result.logs.some(log => log.includes('Response state changed: RUNNING → STOPPED'))
-        ).toBe(true);
+          // Check for state change detection
+          expect(
+            result.logs.some(log => log.includes('Response state changed: RUNNING → STOPPED'))
+          ).toBe(true);
 
-        console.log('✅ Response state observer test passed!');
-      });
+          console.log('✅ Response state observer test passed!');
+        },
+        4
+      );
     },
     isDebugMode ? 24 * 60 * 60 * 1000 : 60_000
   );
