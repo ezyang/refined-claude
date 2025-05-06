@@ -261,6 +261,45 @@ describe.concurrent('rrweb-headless e2e', () => {
     isDebugMode ? 24 * 60 * 60 * 1000 : 60_000
   );
 
+  // Test for continue-usage-limit-reached.json (should not attempt to click Continue when usage limit is hit)
+  it(
+    'should not click Continue button when usage limit is reached',
+    async () => {
+      await runReplayTest('continue-usage-limit-reached.json', result => {
+        // Check that we found at least one Continue button
+        expect(result.logs.some(log => log.includes('Found Continue button'))).toBe(true);
+
+        // Check that we properly detected the Continue button but did not attempt to click it
+        expect(
+          result.logs.some(
+            log =>
+              log.includes('Continue button found during page load, not clicking') ||
+              log.includes('Continue button found but not in appropriate state for clicking')
+          )
+        ).toBe(true);
+
+        // Verify we never actually tried to click the Continue button
+        expect(
+          result.logs.some(
+            log =>
+              log.includes('Clicking "Continue" button after RUNNING -> STOPPED transition') ||
+              log.includes('Clicking "Continue" button during page load while in RUNNING state')
+          )
+        ).toBe(false);
+
+        // Count how many times we detected the Continue button
+        const continueButtonDetections = result.logs.filter(log =>
+          log.includes('Found Continue button')
+        ).length;
+
+        console.log(`Found Continue button ${continueButtonDetections} times but never clicked it`);
+
+        console.log('✅ No Continue button clicks when usage limit reached test passed!');
+      });
+    },
+    isDebugMode ? 24 * 60 * 60 * 1000 : 60_000
+  );
+
   // Test for the simple-response.json file (Response state toggle)
   it(
     'should detect response button state change in simple-response.json',
