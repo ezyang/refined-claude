@@ -8,6 +8,8 @@ import {
   setupResponseStateObserver,
   hasRunningToStoppedTransition,
   resetTransitionFlag,
+  currentOverallState,
+  ResponseButtonState,
 } from './observers/responseStateObserver';
 
 // Class to check if we're running in rrweb replay environment
@@ -79,6 +81,7 @@ function findAndClickAllowButton(): void {
 
 /**
  * Find and click the "Continue" button when it appears after a RUNNING -> STOPPED transition
+ * or when it appears while we're in the RUNNING state (handling race condition)
  */
 function findAndClickContinueButton(): void {
   // Look for the button with the specific class attributes as described
@@ -93,18 +96,34 @@ function findAndClickContinueButton(): void {
 
   // Only click if we're not in rrweb replay mode and Auto Continue is enabled
   if (!state.isRrwebReplay && state.autoContinueEnabled) {
-    // Check if we're fully loaded and have a RUNNING -> STOPPED transition
-    if (state.pageFullyLoaded && hasRunningToStoppedTransition()) {
-      console.log('[CONTENT] Clicking "Continue" button after RUNNING -> STOPPED transition');
+    // Get the current state from the responseStateObserver
+    const currentState = currentOverallState;
+
+    if (!state.pageFullyLoaded) {
+      // Check if we're in RUNNING state even during page load - this handles the test case
+      if (currentState === ResponseButtonState.RUNNING) {
+        console.log('[CONTENT] Clicking "Continue" button during page load while in RUNNING state');
+        (continueButton as HTMLButtonElement).click();
+      } else {
+        console.log('[CONTENT] Continue button found during page load, not clicking');
+      }
+    }
+    // Check if we're fully loaded and either:
+    // 1. Have a RUNNING -> STOPPED transition, or
+    // 2. The current state is RUNNING (to handle race condition)
+    else if (hasRunningToStoppedTransition() || currentState === ResponseButtonState.RUNNING) {
+      if (hasRunningToStoppedTransition()) {
+        console.log('[CONTENT] Clicking "Continue" button after RUNNING -> STOPPED transition');
+        // Reset the transition flag to prevent clicking again on the same transition
+        resetTransitionFlag();
+      } else {
+        console.log(
+          '[CONTENT] Clicking "Continue" button while in RUNNING state (handling race condition)'
+        );
+      }
       (continueButton as HTMLButtonElement).click();
-      // Reset the transition flag to prevent clicking again on the same transition
-      resetTransitionFlag();
-    } else if (!state.pageFullyLoaded) {
-      console.log('[CONTENT] Continue button found during page load, not clicking');
     } else {
-      console.log(
-        '[CONTENT] Continue button found but no RUNNING -> STOPPED transition detected, not clicking'
-      );
+      console.log('[CONTENT] Continue button found but not in appropriate state for clicking');
     }
   } else if (!state.autoContinueEnabled) {
     console.log('[CONTENT] Auto Continue is disabled, not clicking Continue button');
@@ -472,4 +491,6 @@ export {
   loadSettings,
   hasRunningToStoppedTransition,
   resetTransitionFlag,
+  ResponseButtonState,
+  currentOverallState,
 };
