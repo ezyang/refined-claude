@@ -204,14 +204,22 @@ describe.concurrent('rrweb-headless e2e', () => {
     isDebugMode ? 24 * 60 * 60 * 1000 : 60_000
   );
 
-  // Test for the hit-max-length-may-2025.json file (Continue button detection)
+  // Test for the hit-max-length-may-2025.json file (Continue button detection and auto-click)
   it(
-    'should detect the Continue button in hit-max-length-may-2025.json',
+    'should detect and click the Continue button in hit-max-length-may-2025.json',
     async () => {
       await runReplayTest('hit-max-length-may-2025.json', result => {
         // Check for the Continue button in the logs
         expect(result.logs.some(log => log.includes('Found Continue button'))).toBe(true);
-        console.log('✅ Continue button observer test passed!');
+
+        // Check that we click it due to RUNNING → STOPPED transition
+        expect(
+          result.logs.some(log =>
+            log.includes('Clicking "Continue" button after RUNNING -> STOPPED transition')
+          )
+        ).toBe(true);
+
+        console.log('✅ Continue button detect and auto-click test passed!');
       });
     },
     isDebugMode ? 24 * 60 * 60 * 1000 : 60_000
