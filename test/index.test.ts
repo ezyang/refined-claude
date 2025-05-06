@@ -73,7 +73,7 @@ async function runReplayTest(
 
   const result = await runRrwebReplay({
     events: testEvents,
-    playbackSpeed: speed ?? 8192, // Use provided speed or default to 8192
+    playbackSpeed: speed ?? 8, // Use provided speed or default to 8192
     // In debug mode, set timeout to 0 (browser stays open), otherwise use a timeout that's shorter than the test timeout
     timeout: testTimeout,
     // Use persistent profile
