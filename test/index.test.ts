@@ -217,6 +217,34 @@ describe.concurrent('rrweb-headless e2e', () => {
     isDebugMode ? 24 * 60 * 60 * 1000 : 60_000
   );
 
+  // Test for navigate-to-continue-page.json (should NOT auto-continue without transition)
+  it(
+    'should not auto-continue when navigating to a page with Continue button',
+    async () => {
+      await runReplayTest('navigate-to-continue-page.json', result => {
+        // Check that we found a Continue button
+        expect(result.logs.some(log => log.includes('Found Continue button'))).toBe(true);
+
+        // Check that we did NOT click it, since we navigated to it rather than had a RUNNING → STOPPED transition
+        expect(
+          result.logs.some(log =>
+            log.includes('Continue button found during page load, not clicking')
+          )
+        ).toBe(true);
+
+        // Verify we didn't click it (no log saying we clicked it)
+        expect(
+          result.logs.some(log =>
+            log.includes('Clicking "Continue" button after RUNNING -> STOPPED transition')
+          )
+        ).toBe(false);
+
+        console.log('✅ No auto-continue on page navigation test passed!');
+      });
+    },
+    isDebugMode ? 24 * 60 * 60 * 1000 : 60_000
+  );
+
   // Test for the simple-response.json file (Response state toggle)
   it(
     'should detect response button state change in simple-response.json',
